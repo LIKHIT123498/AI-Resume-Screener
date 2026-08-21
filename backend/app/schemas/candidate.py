@@ -12,6 +12,8 @@ class CandidateResponse(BaseModel):
     skills_score: float
     seniority_score: float
     domain_score: float
+    company_changes: int = 0
+    avg_duration_months: float = 0.0
     extracted_skills: List[str] = []
     red_flags: List[str] = []
     is_shortlisted: int

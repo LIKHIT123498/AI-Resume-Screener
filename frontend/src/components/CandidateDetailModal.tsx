@@ -29,10 +29,26 @@ export const CandidateDetailModal: React.FC<Props> = ({ candidate, onClose }) =>
             <p className="text-blue-900 font-medium">"{candidate.one_line_summary}"</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <ScoreCard title="Skills Match" score={candidate.skills_score} />
             <ScoreCard title="Seniority Fit" score={candidate.seniority_score} />
             <ScoreCard title="Domain Exp." score={candidate.domain_score} />
+          </div>
+
+          {/* Correctly Placed Career Stints Section */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex justify-between items-center">
+            <div>
+              <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Career Stints</h4>
+              <p className="text-gray-900 font-medium">
+                Total Company Changes: <span className="font-black text-blue-600">{candidate.company_changes}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Avg Tenure (Last 3)</h4>
+              <p className="text-gray-900 font-medium">
+                <span className="font-black text-blue-600">{candidate.avg_duration_months}</span> months
+              </p>
+            </div>
           </div>
 
           {/* Red Flags Section */}

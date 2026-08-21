@@ -27,22 +27,27 @@ async def upload_and_screen_resumes(
         if not resume_text:
             continue
             
-        evaluation = screen_resume(job.title, job.requirements, resume_text)
-        
+       #evaluation = screen_resume(job.title, job.requirements, resume_text)
+        # Combine the title and requirements into one string for the AI, and pass the resume text
+        evaluation = screen_resume(
+    resume_text=resume_text, 
+    job_requirements=f"Role: {job.title} | Requirements: {job.requirements}")
+
         candidate = Candidate(
             job_id=job.id,
-            name=evaluation.get("name", "Unknown"),
-            email=evaluation.get("email", "Unknown"),
-            phone=evaluation.get("phone", "Unknown"),
-            raw_text=resume_text,
+            name=evaluation.get("name"),
+            email=evaluation.get("email"),
+            phone=evaluation.get("phone"),
             overall_fit_score=evaluation.get("overall_fit_score", 0.0),
             skills_score=evaluation.get("skills_score", 0.0),
             seniority_score=evaluation.get("seniority_score", 0.0),
             domain_score=evaluation.get("domain_score", 0.0),
-            extracted_skills=evaluation.get("skills_matched", []),
+            company_changes=evaluation.get("company_changes", 0),
+            avg_duration_months=evaluation.get("avg_duration_months", 0.0),
+            extracted_skills=evaluation.get("extracted_skills", []),
             red_flags=evaluation.get("red_flags", []),
-            is_shortlisted=1 if evaluation.get("is_shortlisted") else 0,
-            one_line_summary=evaluation.get("one_line_summary", "")
+            is_shortlisted=evaluation.get("is_shortlisted", False),
+            one_line_summary=evaluation.get("one_line_summary")
         )
         db.add(candidate)
         db.commit()

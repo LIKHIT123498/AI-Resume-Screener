@@ -8,6 +8,10 @@ export interface Candidate {
   skills_score: number;
   seniority_score: number;
   domain_score: number;
+  // New fields
+  company_changes: number;
+  avg_duration_months: number;
+  // ---------
   extracted_skills: string[];
   red_flags: string[];
   is_shortlisted: number;
