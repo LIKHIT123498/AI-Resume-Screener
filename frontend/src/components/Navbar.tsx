@@ -1,12 +1,14 @@
 
 import { Briefcase, LogOut } from 'lucide-react'; // <-- Added LogOut icon
 import { Link } from 'react-router-dom';
-
+import { useNavigate } from 'react-router-dom';
 export const Navbar = () => {
+  const navigate = useNavigate();
   // 1. Logic goes ABOVE the return statement
-  const handleLogout = () => {
+ const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.href = '/login'; // Force a full page reload to clear state
+    navigate('/login'); // Cleanly tells React Router to go to login
+    window.location.reload(); // Optional: clears any cached app state
   };
 
   return (
