@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle} from 'lucide-react';
 import type { Candidate } from '../types';
 
 interface Props {

@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Briefcase, LogOut } from 'lucide-react'; // <-- Added LogOut icon
 import { Link } from 'react-router-dom';
 

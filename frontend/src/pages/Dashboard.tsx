@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import  { useEffect, useState } from 'react';
 import type { Job } from '../types';
 import { apiClient } from '../api/client';
 import { JobCard } from '../components/JobCard';
