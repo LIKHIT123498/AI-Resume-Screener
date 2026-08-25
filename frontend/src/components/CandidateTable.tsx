@@ -14,48 +14,48 @@ export const CandidateTable: React.FC<Props> = ({ candidates }) => {
 
   return (
     <>
-      <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-200 mt-8">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50 text-gray-700 font-semibold">
+      <div className="mt-8 overflow-x-auto rounded-xl border border-[#213548] bg-[#081b2a] shadow-[0_0_20px_rgba(15,23,42,0.45)]">
+        <table className="min-w-full divide-y divide-[#213548] text-sm">
+          <thead className="bg-[#0d2134] font-semibold text-slate-200">
             <tr>
-              <th className="py-4 px-6 text-left">Rank</th>
-              <th className="py-4 px-6 text-left">Candidate Info</th>
-              <th className="py-4 px-6 text-center">Fit Score</th>
-              <th className="py-4 px-6 text-left">Matched Skills</th>
-              <th className="py-4 px-6 text-left w-1/3">AI Insight</th>
+              <th className="px-6 py-4 text-left">Rank</th>
+              <th className="px-6 py-4 text-left">Candidate Info</th>
+              <th className="px-6 py-4 text-center">Fit Score</th>
+              <th className="px-6 py-4 text-left">Matched Skills</th>
+              <th className="w-1/3 px-6 py-4 text-left">AI Insight</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-[#213548]">
             {sortedCandidates.map((candidate, index) => (
               <tr 
                 key={candidate.id} 
-                onClick={() => setSelectedCandidate(candidate)} // <-- Make row clickable
-                className="hover:bg-blue-50 transition cursor-pointer" // <-- Add pointer cursor
+                onClick={() => setSelectedCandidate(candidate)}
+                className="cursor-pointer transition hover:bg-[#10293d]"
               >
-                <td className="py-4 px-6 font-bold text-gray-400 text-lg">#{index + 1}</td>
-                <td className="py-4 px-6">
-                  <div className="font-bold text-gray-900">{candidate.name || 'Anonymous'}</div>
-                  <div className="text-gray-500 text-xs mt-1">{candidate.email}</div>
+                <td className="px-6 py-4 text-lg font-bold text-slate-400">#{index + 1}</td>
+                <td className="px-6 py-4">
+                  <div className="font-bold text-white">{candidate.name || 'Anonymous'}</div>
+                  <div className="mt-1 text-xs text-slate-400">{candidate.email}</div>
                 </td>
-                <td className="py-4 px-6 text-center">
-                  <span className={`px-3 py-1.5 rounded-full text-sm font-bold ${
-                    candidate.overall_fit_score >= 75 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
-                    candidate.overall_fit_score >= 50 ? 'bg-amber-100 text-amber-800 border border-amber-200' : 
-                    'bg-red-100 text-red-800 border border-red-200'
+                <td className="px-6 py-4 text-center">
+                  <span className={`rounded-full border px-3 py-1.5 text-sm font-bold ${
+                    candidate.overall_fit_score >= 75 ? 'border-[#1f5f4a] bg-[#173b2f] text-[#8beec2]' :
+                    candidate.overall_fit_score >= 50 ? 'border-[#7b5b27] bg-[#3b2c1d] text-[#f7d77d]' : 
+                    'border-[#6a2f39] bg-[#2a1d2a] text-[#ff9aa5]'
                   }`}>
                     {candidate.overall_fit_score}%
                   </span>
                 </td>
-                <td className="py-4 px-6">
+                <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1.5">
                     {candidate.extracted_skills?.slice(0, 4).map((skill, i) => (
-                      <span key={i} className="bg-gray-100 text-gray-700 border border-gray-200 px-2 py-0.5 rounded text-xs font-medium">
+                      <span key={i} className="rounded border border-[#27465c] bg-[#10293d] px-2 py-0.5 text-xs font-medium text-slate-200">
                         {skill}
                       </span>
                     ))}
                   </div>
                 </td>
-                <td className="py-4 px-6 text-gray-600 truncate max-w-xs">
+                <td className="max-w-xs truncate px-6 py-4 text-slate-300">
                   {candidate.one_line_summary}
                 </td>
               </tr>
@@ -64,7 +64,6 @@ export const CandidateTable: React.FC<Props> = ({ candidates }) => {
         </table>
       </div>
 
-      {/* Render the modal if a candidate is clicked */}
       {selectedCandidate && (
         <CandidateDetailModal 
           candidate={selectedCandidate} 

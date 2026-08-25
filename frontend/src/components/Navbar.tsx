@@ -12,16 +12,17 @@ export const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-      <Link to="/" className="flex items-center gap-2">
-        <Briefcase className="text-blue-600 w-6 h-6" />
-        <span className="text-xl font-bold text-gray-900">AI Recruiter</span>
+    <nav className="sticky top-0 z-40 border-b border-[#1a2d3b] bg-[#07131e]/90 px-6 py-4 backdrop-blur-sm flex items-center justify-between">
+      <Link to="/" className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#1c352d] text-[#7ef0be] shadow-[0_0_18px_rgba(126,240,190,0.25)]">
+          <Briefcase className="w-5 h-5" />
+        </div>
+        <span className="text-2xl font-bold tracking-tight text-white">AI Recruiter</span>
       </Link>
 
-      {/* 2. Add the UI button to trigger the function */}
       <button 
         onClick={handleLogout}
-        className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-red-600 transition-colors"
+        className="flex items-center gap-2 text-sm font-semibold text-slate-200 transition-colors hover:text-[#7ef0be]"
       >
         <LogOut className="w-5 h-5" />
         Sign Out

@@ -11,22 +11,22 @@ export const JobCard: React.FC<Props> = ({ job }) => {
   const date = new Date(job.created_at).toLocaleDateString();
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition duration-200 flex flex-col h-full">
+    <div className="flex h-full flex-col rounded-2xl border border-[#2a3f4f] bg-[linear-gradient(180deg,#0d1b2a_0%,#0a1a26_100%)] p-6 shadow-[0_0_20px_rgba(30,58,80,0.35)] transition duration-200 hover:border-[#3ae1a0] hover:shadow-[0_0_28px_rgba(58,225,160,0.12)]">
       <div className="flex-grow">
-        <div className="flex justify-between items-start mb-4">
+        <div className="mb-4 flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">{job.title}</h3>
-            <span className="inline-block bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full mt-2">
+            <h3 className="text-[1.8rem] font-black leading-tight tracking-tight text-white">{job.title}</h3>
+            <span className="mt-3 inline-block rounded-full border border-[#24534a] bg-[#12382f] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8beec2]">
               {job.department || 'General'}
             </span>
           </div>
         </div>
-        <p className="text-gray-600 text-sm mb-6 line-clamp-3">
+        <p className="mb-6 text-sm leading-7 text-slate-300 line-clamp-3">
           {job.description}
         </p>
       </div>
       
-      <div className="flex items-center gap-4 text-sm text-gray-500 mb-6">
+      <div className="mb-6 flex items-center gap-4 text-sm text-slate-400">
         <div className="flex items-center gap-1.5">
           <Calendar className="w-4 h-4" />
           <span>{date}</span>
@@ -39,7 +39,7 @@ export const JobCard: React.FC<Props> = ({ job }) => {
 
       <Link 
         to={`/jobs/${job.id}`}
-        className="block w-full text-center bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-md border border-gray-200 transition"
+        className="block w-full rounded-xl border border-[#2bd690] bg-[#2ad38a] px-4 py-3 text-center text-base font-bold text-[#02170f] transition hover:bg-[#42df98]"
       >
         View & Screen Candidates
       </Link>

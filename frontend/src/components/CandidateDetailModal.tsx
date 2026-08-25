@@ -9,64 +9,60 @@ interface Props {
 
 export const CandidateDetailModal: React.FC<Props> = ({ candidate, onClose }) => {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#24384b] bg-[#081b2a] shadow-[0_0_32px_rgba(15,23,42,0.7)]">
         
-        {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between border-b border-[#1b2f3d] bg-[#0f2537] p-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{candidate.name || 'Anonymous Candidate'}</h2>
-            <p className="text-gray-500 mt-1">{candidate.email} • {candidate.phone}</p>
+            <h2 className="text-2xl font-bold text-white">{candidate.name || 'Anonymous Candidate'}</h2>
+            <p className="mt-1 text-slate-300">{candidate.email} • {candidate.phone}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
-            <X className="w-6 h-6 text-gray-500" />
+          <button onClick={onClose} className="rounded-full p-2 transition hover:bg-[#162f43]">
+            <X className="w-6 h-6 text-slate-300" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-            <p className="text-blue-900 font-medium">"{candidate.one_line_summary}"</p>
+        <div className="overflow-y-auto p-6">
+          <div className="mb-6 rounded-xl border border-[#1f5f4a] bg-[#12382f] p-4">
+            <p className="font-medium text-[#d9f8ea]">"{candidate.one_line_summary}"</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="mb-6 grid grid-cols-3 gap-4">
             <ScoreCard title="Skills Match" score={candidate.skills_score} />
             <ScoreCard title="Seniority Fit" score={candidate.seniority_score} />
             <ScoreCard title="Domain Exp." score={candidate.domain_score} />
           </div>
 
-          {/* Correctly Placed Career Stints Section */}
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex justify-between items-center">
+          <div className="mb-6 flex items-center justify-between rounded-xl border border-[#213548] bg-[#0d2134] p-4">
             <div>
-              <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Career Stints</h4>
-              <p className="text-gray-900 font-medium">
-                Total Company Changes: <span className="font-black text-blue-600">{candidate.company_changes}</span>
+              <h4 className="mb-1 text-sm font-bold uppercase tracking-wider text-slate-400">Career Stints</h4>
+              <p className="font-medium text-slate-100">
+                Total Company Changes: <span className="font-black text-[#7ef0be]">{candidate.company_changes}</span>
               </p>
             </div>
             <div className="text-right">
-              <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Avg Tenure (Last 3)</h4>
-              <p className="text-gray-900 font-medium">
-                <span className="font-black text-blue-600">{candidate.avg_duration_months}</span> months
+              <h4 className="mb-1 text-sm font-bold uppercase tracking-wider text-slate-400">Avg Tenure (Last 3)</h4>
+              <p className="font-medium text-slate-100">
+                <span className="font-black text-[#7ef0be]">{candidate.avg_duration_months}</span> months
               </p>
             </div>
           </div>
 
-          {/* Red Flags Section */}
           <div className="mb-6">
-            <h3 className="flex items-center gap-2 font-bold text-gray-900 mb-3 text-lg">
-              <AlertTriangle className="w-5 h-5 text-amber-500" /> Detected Red Flags
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
+              <AlertTriangle className="w-5 h-5 text-amber-400" /> Detected Red Flags
             </h3>
             {candidate.red_flags.length > 0 ? (
               <ul className="space-y-2">
                 {candidate.red_flags.map((flag, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-red-700 bg-red-50 p-3 rounded-lg border border-red-100">
+                  <li key={idx} className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-red-100">
                     <span className="mt-0.5">•</span>
                     <span>{flag}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className="text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-100">
                 <CheckCircle className="w-5 h-5" /> No critical red flags detected.
               </div>
             )}
@@ -78,9 +74,9 @@ export const CandidateDetailModal: React.FC<Props> = ({ candidate, onClose }) =>
 };
 
 const ScoreCard = ({ title, score }: { title: string, score: number }) => (
-  <div className="bg-white border border-gray-200 rounded-xl p-4 text-center shadow-sm">
-    <div className="text-gray-500 text-sm font-semibold mb-1">{title}</div>
-    <div className={`text-3xl font-black ${score >= 75 ? 'text-emerald-600' : score >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+  <div className="rounded-xl border border-[#213548] bg-[#0d2134] p-4 text-center shadow-sm">
+    <div className="mb-1 text-sm font-semibold text-slate-400">{title}</div>
+    <div className={`text-3xl font-black ${score >= 75 ? 'text-[#7ef0be]' : score >= 50 ? 'text-amber-300' : 'text-red-300'}`}>
       {score}%
     </div>
   </div>

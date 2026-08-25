@@ -34,17 +34,16 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <div className="flex justify-between items-center mb-8">
+    <div className="max-w-7xl mx-auto px-6 py-8 text-slate-100">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Job Dashboard</h1>
-          <p className="text-gray-600 mt-1">Manage your active roles and AI screenings.</p>
+          <h1 className="text-4xl font-black tracking-tight text-white">Job Dashboard</h1>
+          <p className="mt-2 text-lg text-slate-300">Manage your active roles and AI screenings.</p>
         </div>
         
-        {/* Update the button to open the modal */}
         <button 
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-medium transition shadow-sm"
+          className="flex items-center gap-2 rounded-xl bg-[#2ad38a] px-5 py-3 font-semibold text-[#041510] shadow-[0_0_24px_rgba(42,211,138,0.35)] transition hover:bg-[#42df98]"
         >
           <Plus className="w-5 h-5" />
           Create New Job
@@ -52,11 +51,11 @@ export const Dashboard = () => {
       </div>
 
       {jobs.length === 0 ? (
-        <div className="text-center bg-white p-16 rounded-xl border border-dashed border-gray-300">
-          <p className="text-gray-500 font-medium">No jobs found. Create one to get started.</p>
+        <div className="rounded-2xl border border-dashed border-[#224154] bg-[#081b2a] p-16 text-center">
+          <p className="text-slate-300 font-medium">No jobs found. Create one to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} />
           ))}

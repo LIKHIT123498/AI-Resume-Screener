@@ -49,44 +49,44 @@ export const Login: React.FC<Props> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-[#020b14] p-4">
+      <div className="w-full max-w-md rounded-2xl border border-[#1f3343] bg-[#0a1725] p-8 shadow-[0_0_32px_rgba(15,23,42,0.7)]">
         
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <h2 className="mb-2 text-3xl font-black tracking-tight text-white">
           {isLoginMode ? 'Welcome Back' : 'Create an Account'}
         </h2>
-        <p className="text-gray-500 mb-6">
+        <p className="mb-6 text-slate-300">
           {isLoginMode ? 'Log in to access your recruitment dashboard.' : 'Sign up to start screening resumes with AI.'}
         </p>
 
         {error && (
-          <div className="bg-red-50 border border-red-100 text-red-700 p-3 rounded-lg mb-4 text-sm">
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-200">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-[#2d4256] bg-[#091c2d] px-4 py-2.5 text-white placeholder:text-slate-400 focus:border-[#2ad38a] focus:outline-none focus:ring-2 focus:ring-[#2ad38a]/40"
               placeholder="recruiter@company.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
+            <label className="mb-1 block text-sm font-semibold text-slate-200">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-xl border border-[#2d4256] bg-[#091c2d] px-4 py-2.5 text-white placeholder:text-slate-400 focus:border-[#2ad38a] focus:outline-none focus:ring-2 focus:ring-[#2ad38a]/40"
               placeholder="••••••••"
             />
           </div>
@@ -94,13 +94,13 @@ export const Login: React.FC<Props> = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50"
+            className="w-full rounded-xl bg-[#2ad38a] py-3 font-bold text-[#03150d] transition hover:bg-[#42df98] disabled:opacity-50"
           >
             {isLoading ? 'Processing...' : (isLoginMode ? 'Sign In' : 'Sign Up')}
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
+        <div className="mt-6 text-center text-sm text-slate-300">
           {isLoginMode ? "Don't have an account? " : "Already have an account? "}
           <button 
             type="button"
@@ -108,7 +108,7 @@ export const Login: React.FC<Props> = ({ onLoginSuccess }) => {
               setIsLoginMode(!isLoginMode);
               setError('');
             }}
-            className="text-blue-600 font-bold hover:underline focus:outline-none"
+            className="font-bold text-[#7ef0be] hover:underline focus:outline-none"
           >
             {isLoginMode ? 'Sign Up' : 'Sign In'}
           </button>

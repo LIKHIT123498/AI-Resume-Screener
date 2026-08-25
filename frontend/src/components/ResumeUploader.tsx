@@ -58,27 +58,27 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
 
   return (
     <div 
-      className={`border-2 border-dashed rounded-xl p-12 text-center transition duration-200 ${
-        isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white hover:border-gray-400'
+      className={`rounded-xl border-2 border-dashed p-12 text-center transition duration-200 ${
+        isDragging ? 'border-[#2ad38a] bg-[#102d24]' : 'border-[#294a5d] bg-[#081b2a] hover:border-[#3adf9a]'
       }`}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
       {isUploading ? (
-        <div className="flex flex-col items-center text-blue-600">
-          <Loader2 className="w-12 h-12 animate-spin mb-4" />
+        <div className="flex flex-col items-center text-[#7ef0be]">
+          <Loader2 className="mb-4 w-12 h-12 animate-spin" />
           <h3 className="text-lg font-bold">AI is analyzing resumes...</h3>
-          <p className="text-sm mt-2 text-gray-500">Extracting text and calculating fit scores. This may take a moment.</p>
+          <p className="mt-2 text-sm text-slate-300">Extracting text and calculating fit scores. This may take a moment.</p>
         </div>
       ) : (
         <div className="flex flex-col items-center">
-          <Upload className="w-12 h-12 text-gray-400 mb-4" />
-          <h3 className="text-xl font-bold text-gray-800">Drag & Drop Resumes Here</h3>
-          <p className="text-gray-500 text-sm mt-2 mb-6">Batch upload supported. PDF format only.</p>
+          <Upload className="mb-4 w-12 h-12 text-slate-400" />
+          <h3 className="text-xl font-bold text-white">Drag & Drop Resumes Here</h3>
+          <p className="mt-2 mb-6 text-sm text-slate-300">Batch upload supported. PDF format only.</p>
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2.5 rounded-lg font-medium transition shadow-sm"
+            className="rounded-lg bg-[#2ad38a] px-6 py-2.5 font-medium text-[#041510] shadow-[0_0_20px_rgba(42,211,138,0.25)] transition hover:bg-[#42df98]"
           >
             Browse Files
           </button>

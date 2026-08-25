@@ -35,46 +35,46 @@ export const JobDetail = () => {
     fetchJobData();
   }, [id]);
 
-  if (loading) return <div className="p-20 text-center text-gray-500 font-medium">Loading Job Profile...</div>;
-  if (!job) return <div className="p-20 text-center text-red-500 font-medium">Error 404: Job not found.</div>;
+  if (loading) return <div className="p-20 text-center text-slate-300 font-medium">Loading Job Profile...</div>;
+  if (!job) return <div className="p-20 text-center text-red-400 font-medium">Error 404: Job not found.</div>;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <Link to="/" className="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600 font-semibold mb-6 transition">
+    <div className="mx-auto max-w-7xl px-6 py-8 text-slate-100">
+      <Link to="/" className="mb-6 inline-flex items-center gap-2 font-semibold text-slate-300 transition hover:text-[#7ef0be]">
         <ArrowLeft className="w-4 h-4" /> Back to Jobs
       </Link>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-3">{job.title}</h1>
-        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-md text-sm font-bold tracking-wide uppercase">
+      <div className="mb-8 rounded-2xl border border-[#213548] bg-[#081b2a] p-8 shadow-[0_0_24px_rgba(15,23,42,0.45)]">
+        <h1 className="mb-3 text-3xl font-extrabold text-white">{job.title}</h1>
+        <span className="rounded-md border border-[#24534a] bg-[#12382f] px-3 py-1 text-sm font-bold uppercase tracking-wide text-[#8beec2]">
           {job.department || 'General'}
         </span>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 border-t border-gray-100 pt-8">
+        <div className="mt-8 grid grid-cols-1 gap-8 border-t border-[#1d3040] pt-8 md:grid-cols-2">
           <div>
-            <h3 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-3">
-              <Briefcase className="w-5 h-5 text-blue-500" /> Role Description
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
+              <Briefcase className="w-5 h-5 text-[#7ef0be]" /> Role Description
             </h3>
-            <p className="text-gray-600 leading-relaxed">{job.description}</p>
+            <p className="leading-relaxed text-slate-300">{job.description}</p>
           </div>
           <div>
-            <h3 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-3">
-              <FileText className="w-5 h-5 text-blue-500" /> Core Requirements
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-bold text-white">
+              <FileText className="w-5 h-5 text-[#7ef0be]" /> Core Requirements
             </h3>
-            <p className="text-gray-600 leading-relaxed">{job.requirements}</p>
+            <p className="leading-relaxed text-slate-300">{job.requirements}</p>
           </div>
         </div>
       </div>
 
       <div className="mb-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Screen Candidates</h2>
+        <h2 className="mb-6 text-2xl font-bold text-white">Screen Candidates</h2>
         <ResumeUploader jobId={id} onUploadSuccess={fetchJobData} />
       </div>
       
       {candidates.length > 0 && (
         <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Ranked Shortlist</h2>
-          <p className="text-gray-500 mb-6">Candidates autonomously evaluated against job requirements by AI.</p>
+          <h2 className="mb-2 text-2xl font-bold text-white">Ranked Shortlist</h2>
+          <p className="mb-6 text-slate-300">Candidates autonomously evaluated against job requirements by AI.</p>
           <CandidateTable candidates={candidates} />
         </div>
       )}

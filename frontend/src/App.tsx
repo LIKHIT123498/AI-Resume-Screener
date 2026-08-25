@@ -13,7 +13,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
+      <div className="min-h-screen bg-[#020b14] font-sans text-slate-100">
         
         {/* Only render the Navbar if the user is actually logged in */}
         {isAuthenticated && <Navbar />}
