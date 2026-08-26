@@ -13,3 +13,4 @@ openai==1.14.1
 google-generativeai==0.4.1
 passlib==1.7.4
 bcrypt==4.1.2
+python-docx==1.1.0

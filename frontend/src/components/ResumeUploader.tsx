@@ -12,7 +12,7 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       await uploadFiles(Array.from(e.target.files));
     }
@@ -29,15 +29,21 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
   const uploadFiles = async (files: File[]) => {
     if (!jobId) return;
     
+    const validExtensions = ['.pdf', '.docx'];
     const formData = new FormData();
-    files.forEach(file => {
-      if (file.type === 'application/pdf') {
-        formData.append('files', file);
+
+    for (const file of files) {
+      const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      
+      if (!validExtensions.includes(fileExtension)) {
+        alert(`Unsupported file format: ${file.name}. Only PDF and DOCX files are supported!`);
+        return; // Stop the upload process immediately if an invalid file is found
       }
-    });
+      formData.append('files', file);
+    }
 
     if (!formData.has('files')) {
-      alert('Please upload PDF files only.');
+      alert('Please upload valid PDF or DOCX files.');
       return;
     }
 
@@ -75,20 +81,21 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
         <div className="flex flex-col items-center">
           <Upload className="mb-4 w-12 h-12 text-slate-400" />
           <h3 className="text-xl font-bold text-white">Drag & Drop Resumes Here</h3>
-          <p className="mt-2 mb-6 text-sm text-slate-300">Batch upload supported. PDF format only.</p>
+          <p className="mt-2 mb-6 text-sm text-slate-300">Batch upload supported. PDF and DOCX formats allowed.</p>
           <button 
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-lg bg-[#2ad38a] px-6 py-2.5 font-medium text-[#041510] shadow-[0_0_20px_rgba(42,211,138,0.25)] transition hover:bg-[#42df98]"
           >
             Browse Files
           </button>
           <input 
+            ref={fileInputRef}
             type="file" 
             multiple 
-            accept=".pdf" 
-            className="hidden" 
-            ref={fileInputRef}
-            onChange={handleFileChange}
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+            onChange={handleFileSelect}
+            className="hidden"
           />
         </div>
       )}
