@@ -21,11 +21,34 @@ app = FastAPI(title="AI Resume Screener API", version="1.0")
 # 4. Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[
+        "https://ai-resume-screener-liart-seven.vercel.app", 
+        "http://localhost:5173", # Keep local development too
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+'''
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# Configure CORS properly
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://ai-resume-screener-liart-seven.vercel.app", 
+        "http://localhost:5173", # Keep local development too
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+'''
 
 # 5. Resume Upload Endpoint
 @app.post("/api/v1/resumes/upload")
