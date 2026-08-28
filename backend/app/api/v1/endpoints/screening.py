@@ -4,7 +4,7 @@ from typing import List
 from app.core.database import get_db
 from app.models.job import Job
 from app.models.candidate import Candidate
-from app.services.parser import extract_text_from_pdf
+from app.services.parser import extract_text_from_file
 from app.services.ai_engine import screen_resume
 from app.models.user import User
 from app.api.deps import get_current_user
@@ -29,7 +29,7 @@ async def upload_and_screen_resumes(
     results = []
     for file in files:
         contents = await file.read()
-        resume_text = extract_text_from_pdf(contents)
+        resume_text = extract_text_from_file(contents, file.filename)
         
         if not resume_text:
             continue
