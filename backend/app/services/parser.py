@@ -1,10 +1,12 @@
 import io
+import zipfile
+from xml.etree import ElementTree
 from pypdf import PdfReader
-from docx import Document
 
 def extract_text_from_file(file_content: bytes, filename: str) -> str:
     """
-    Robustly extracts text from PDF or DOCX bytes, safely ignoring embedded images.
+    Robustly extracts text from PDF or DOCX bytes. 
+    Uses direct XML tree traversal for DOCX to safely bypass images, floating shapes, and tables.
     """
     text = ""
     try:
@@ -16,23 +18,23 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
                     text += extracted + "\n"
                     
         elif filename.lower().endswith(".docx"):
-            doc = Document(io.BytesIO(file_content))
-            
-            # Extract text paragraph by paragraph, ignoring embedded drawing layers/photos
-            for paragraph in doc.paragraphs:
-                para_text = "".join([run.text for run in paragraph.runs if run.text])
-                if not para_text.strip():
-                    para_text = paragraph.text
-                if para_text.strip():
-                    text += para_text + "\n"
-                    
-            # Extract text from tables safely
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        cell_text = "".join([p.text for p in cell.paragraphs])
-                        if cell_text.strip():
-                            text += cell_text + "\n"
+            # DOCX files are zip archives containing XML components
+            with zipfile.ZipFile(io.BytesIO(file_content)) as docx_zip:
+                # Read the main document XML content
+                xml_content = docx_zip.read('word/document.xml')
+                tree = ElementTree.fromstring(xml_content)
+                
+                # Word XML namespace for text nodes
+                WORD_NAMESPACE = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+                TEXT_TAG = WORD_NAMESPACE + 't'
+                
+                # Extract text from all text elements across paragraphs, tables, and shapes
+                paragraphs = []
+                for elem in tree.iter():
+                    if elem.tag == TEXT_TAG and elem.text:
+                        paragraphs.append(elem.text)
+                
+                text = " ".join(paragraphs)
         else:
             raise ValueError("Unsupported file format.")
             
