@@ -4,7 +4,7 @@ from docx import Document
 
 def extract_text_from_file(file_content: bytes, filename: str) -> str:
     """
-    Robustly extracts text from uploaded PDF or DOCX bytes, handling paragraphs, runs, tables, and hyperlinks.
+    Robustly extracts text from PDF or DOCX bytes, safely ignoring embedded images.
     """
     text = ""
     try:
@@ -18,26 +18,21 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         elif filename.lower().endswith(".docx"):
             doc = Document(io.BytesIO(file_content))
             
-            # Extract text from paragraphs and inline runs (captures formatted text & links)
+            # Extract text paragraph by paragraph, ignoring embedded drawing layers/photos
             for paragraph in doc.paragraphs:
-                para_text = ""
-                for run in paragraph.runs:
-                    if run.text:
-                        para_text += run.text
-                # Fallback to paragraph.text if runs came up empty
+                para_text = "".join([run.text for run in paragraph.runs if run.text])
                 if not para_text.strip():
                     para_text = paragraph.text
                 if para_text.strip():
                     text += para_text + "\n"
                     
-            # Extract text from tables if any exist
+            # Extract text from tables safely
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         cell_text = "".join([p.text for p in cell.paragraphs])
                         if cell_text.strip():
                             text += cell_text + "\n"
-                            
         else:
             raise ValueError("Unsupported file format.")
             
