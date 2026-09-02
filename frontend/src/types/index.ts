@@ -24,6 +24,7 @@ export interface Job {
   department?: string;
   description: string;
   requirements: string;
+  role_type?: 'technical' | 'non_technical';
   created_at: string;
   candidates?: Candidate[];
 }

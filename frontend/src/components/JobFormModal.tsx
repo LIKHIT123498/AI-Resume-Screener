@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { RoleTypeSelector } from './RoleTypeSelector';
 
 interface Props {
   onClose: () => void;
@@ -12,6 +13,7 @@ export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess }) => {
   const [department, setDepartment] = useState('');
   const [description, setDescription] = useState('');
   const [requirements, setRequirements] = useState('');
+  const [roleType, setRoleType] = useState<'technical' | 'non_technical'>('technical');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,6 +26,7 @@ export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess }) => {
         department,
         description,
         requirements,
+        role_type: roleType,
       });
       onSuccess(); // Triggers the dashboard to fetch the updated list
       onClose();   // Closes the modal
@@ -37,7 +40,7 @@ export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#24384b] bg-[#081b2a] shadow-[0_0_32px_rgba(15,23,42,0.7)]">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#24384b] bg-[#081b2a] shadow-[0_0_32px_rgba(15,23,42,0.7)]">
         
         <div className="flex items-center justify-between border-b border-[#1b2f3d] bg-[#0f2537] p-6">
           <h2 className="text-xl font-bold text-white">Create New Job Role</h2>
@@ -69,6 +72,11 @@ export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess }) => {
                 placeholder="e.g. Engineering"
               />
             </div>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">Select Domain Track *</label>
+            <RoleTypeSelector selectedRoleType={roleType} onSelect={setRoleType} />
           </div>
 
           <div className="mb-4">

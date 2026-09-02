@@ -21,6 +21,25 @@ else:
 
 logger = logging.getLogger(__name__)
 
+def calculate_overall_fit(
+    skills_score: float, 
+    seniority_score: float, 
+    domain_score: float, 
+    role_type: str = "technical"
+) -> float:
+    """
+    Computes overall fit score based on role track:
+    - Technical: 50% skills, 30% seniority, 20% domain
+    - Non-Technical: Preserves previous equal/balanced weighting (34% skills, 33% seniority, 33% domain)
+    """
+    if role_type == "technical":
+        overall = (skills_score * 0.50) + (seniority_score * 0.30) + (domain_score * 0.20)
+    else:
+        # Previous standard balanced calculation
+        overall = (skills_score * 0.34) + (seniority_score * 0.33) + (domain_score * 0.33)
+        
+    return round(overall, 2)
+
 def screen_resume(resume_text: str, job_requirements: str) -> dict:
     # The prompt MUST be inside this function so it can use the variables passed to it!
     prompt = f"""

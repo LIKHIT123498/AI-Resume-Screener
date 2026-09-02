@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Job } from '../types';
 import { Link } from 'react-router-dom';
-import { Calendar, Users } from 'lucide-react';
+import { Calendar, Users, Cpu } from 'lucide-react';
 
 interface Props {
   job: Job;
@@ -16,9 +16,26 @@ export const JobCard: React.FC<Props> = ({ job }) => {
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h3 className="text-[1.8rem] font-black leading-tight tracking-tight text-white">{job.title}</h3>
-            <span className="mt-3 inline-block rounded-full border border-[#24534a] bg-[#12382f] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8beec2]">
-              {job.department || 'General'}
-            </span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-block rounded-full border border-[#24534a] bg-[#12382f] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8beec2]">
+                {job.department || 'General'}
+              </span>
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                job.role_type === 'non_technical'
+                  ? 'border-sky-500/30 bg-sky-950/40 text-sky-300'
+                  : 'border-[#2ad38a]/30 bg-[#162923] text-[#7ef0be]'
+              }`}>
+                {job.role_type === 'non_technical' ? (
+                  <>
+                    <Users className="w-3 h-3" /> Non-Technical
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="w-3 h-3" /> Technical (50/30/20)
+                  </>
+                )}
+              </span>
+            </div>
           </div>
         </div>
         <p className="mb-6 text-sm leading-7 text-slate-300 line-clamp-3">

@@ -8,6 +8,7 @@ class JobCreate(BaseModel):
     department: Optional[str] = None
     description: str
     requirements: str
+    role_type: Optional[str] = "technical"  # "technical" or "non_technical"
 
 class JobResponse(JobCreate):
     id: int

@@ -21,6 +21,7 @@ def create_job(
         department=job_in.department,
         description=job_in.description,
         requirements=job_in.requirements,
+        role_type=job_in.role_type or "technical",
         user_id=current_user.id 
     )
     db.add(new_job)

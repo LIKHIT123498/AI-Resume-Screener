@@ -11,12 +11,10 @@ class Job(Base):
     department = Column(String(255), nullable=True)
     description = Column(Text, nullable=False)
     requirements = Column(Text, nullable=False)
-    
+    role_type = Column(String(50), default="technical")  # "technical" or "non_technical"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     # --- ADD THIS MISSING COLUMN ---
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    # -------------------------------
-    
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     owner = relationship("User", back_populates="jobs")
     candidates = relationship("Candidate", back_populates="job", cascade="all, delete-orphan")
