@@ -65,6 +65,21 @@ export const JobDetail = () => {
               </>
             )}
           </span>
+          <button
+            type="button"
+            onClick={async () => {
+              const newRole = job.role_type === 'non_technical' ? 'technical' : 'non_technical';
+              try {
+                await apiClient.patch(`/jobs/${job.id}`, { role_type: newRole });
+                await fetchJobData();
+              } catch (err) {
+                console.error('Failed to switch track:', err);
+              }
+            }}
+            className="rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition cursor-pointer"
+          >
+            Switch to {job.role_type === 'non_technical' ? 'Technical' : 'Non-Technical'}
+          </button>
         </div>
         
         <div className="mt-8 grid grid-cols-1 gap-8 border-t border-[#1d3040] pt-8 md:grid-cols-2">

@@ -10,6 +10,13 @@ class JobCreate(BaseModel):
     requirements: str
     role_type: Optional[str] = "technical"  # "technical" or "non_technical"
 
+class JobUpdate(BaseModel):
+    title: Optional[str] = None
+    department: Optional[str] = None
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    role_type: Optional[str] = None
+
 class JobResponse(JobCreate):
     id: int
     created_at: datetime
