@@ -27,7 +27,7 @@ export const JobCard: React.FC<Props> = ({ job }) => {
               }`}>
                 {job.role_type === 'non_technical' ? (
                   <>
-                    <Users className="w-3 h-3" /> Non-Technical
+                    <Users className="w-3 h-3" /> Non-Technical (40/20/40)
                   </>
                 ) : (
                   <>

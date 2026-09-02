@@ -57,7 +57,7 @@ export const JobDetail = () => {
           }`}>
             {job.role_type === 'non_technical' ? (
               <>
-                <Users className="w-4 h-4" /> Non-Technical Track (Balanced 34/33/33)
+                <Users className="w-4 h-4" /> Non-Technical Track (40% Skills • 20% Seniority • 40% Domain)
               </>
             ) : (
               <>

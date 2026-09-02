@@ -30,13 +30,13 @@ def calculate_overall_fit(
     """
     Computes overall fit score based on role track:
     - Technical: 50% skills, 30% seniority, 20% domain
-    - Non-Technical: Preserves previous equal/balanced weighting (34% skills, 33% seniority, 33% domain)
+    - Non-Technical: 40% skills, 20% seniority, 40% domain
     """
     if role_type == "technical":
         overall = (skills_score * 0.50) + (seniority_score * 0.30) + (domain_score * 0.20)
     else:
-        # Previous standard balanced calculation
-        overall = (skills_score * 0.34) + (seniority_score * 0.33) + (domain_score * 0.33)
+        # Non-Technical: Seniority (20%), Domain (40%), Skills (40%)
+        overall = (skills_score * 0.40) + (seniority_score * 0.20) + (domain_score * 0.40)
         
     return round(overall, 2)
 

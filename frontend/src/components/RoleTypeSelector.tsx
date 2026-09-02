@@ -70,7 +70,7 @@ export const RoleTypeSelector: React.FC<RoleTypeSelectorProps> = ({
             adaptability, organizational impact, and general domain competencies.
           </p>
           <div className="inline-block bg-[#162923] text-emerald-300 text-xs px-3 py-1 rounded-full mb-4 font-medium">
-            Balanced Role Weighting (34/33/33)
+            Formula: 40% Skill • 20% Seniority • 40% Domain
           </div>
         </div>
 
