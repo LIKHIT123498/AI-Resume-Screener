@@ -6,14 +6,15 @@ import { RoleTypeSelector } from './RoleTypeSelector';
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  initialRoleType?: 'technical' | 'non_technical';
 }
 
-export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess }) => {
+export const JobFormModal: React.FC<Props> = ({ onClose, onSuccess, initialRoleType = 'technical' }) => {
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('');
   const [description, setDescription] = useState('');
   const [requirements, setRequirements] = useState('');
-  const [roleType, setRoleType] = useState<'technical' | 'non_technical'>('technical');
+  const [roleType, setRoleType] = useState<'technical' | 'non_technical'>(initialRoleType);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {

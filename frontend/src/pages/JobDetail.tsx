@@ -40,8 +40,11 @@ export const JobDetail = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 text-slate-100">
-      <Link to="/" className="mb-6 inline-flex items-center gap-2 font-semibold text-slate-300 transition hover:text-[#7ef0be]">
-        <ArrowLeft className="w-4 h-4" /> Back to Jobs
+      <Link 
+        to={`/?portal=${job.role_type === 'non_technical' ? 'non_technical' : 'technical'}`} 
+        className="mb-6 inline-flex items-center gap-2 font-semibold text-slate-300 transition hover:text-[#7ef0be]"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back to {job.role_type === 'non_technical' ? 'Non-Technical' : 'Technical'} Portal
       </Link>
 
       <div className="mb-8 rounded-2xl border border-[#213548] bg-[#081b2a] p-8 shadow-[0_0_24px_rgba(15,23,42,0.45)]">
