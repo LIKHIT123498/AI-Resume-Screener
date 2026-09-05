@@ -95,3 +95,19 @@ def update_job(
     db.commit()
     db.refresh(job)
     return job
+
+@router.delete("/{job_id}")
+def delete_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(
+            status_code=404, 
+            detail="Job not found or you do not have permission to delete it."
+        )
+    db.delete(job)
+    db.commit()
+    return {"message": "Job deleted successfully", "job_id": job_id}

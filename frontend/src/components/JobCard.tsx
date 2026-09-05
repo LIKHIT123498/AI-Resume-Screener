@@ -1,20 +1,22 @@
 import React from 'react';
 import type { Job } from '../types';
 import { Link } from 'react-router-dom';
-import { Calendar, Users, Cpu } from 'lucide-react';
+import { Calendar, Users, Cpu, Pencil, Trash2 } from 'lucide-react';
 
 interface Props {
   job: Job;
+  onEdit?: (job: Job) => void;
+  onDelete?: (job: Job) => void;
 }
 
-export const JobCard: React.FC<Props> = ({ job }) => {
+export const JobCard: React.FC<Props> = ({ job, onEdit, onDelete }) => {
   const date = new Date(job.created_at).toLocaleDateString();
 
   return (
     <div className="flex h-full flex-col rounded-2xl border border-[#2a3f4f] bg-[linear-gradient(180deg,#0d1b2a_0%,#0a1a26_100%)] p-6 shadow-[0_0_20px_rgba(30,58,80,0.35)] transition duration-200 hover:border-[#3ae1a0] hover:shadow-[0_0_28px_rgba(58,225,160,0.12)]">
       <div className="flex-grow">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
             <h3 className="text-[1.8rem] font-black leading-tight tracking-tight text-white">{job.title}</h3>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="inline-block rounded-full border border-[#24534a] bg-[#12382f] px-3 py-1 text-xs font-bold uppercase tracking-[0.08em] text-[#8beec2]">
@@ -37,6 +39,31 @@ export const JobCard: React.FC<Props> = ({ job }) => {
               </span>
             </div>
           </div>
+
+          {(onEdit || onDelete) && (
+            <div className="flex items-center gap-1 bg-[#0b1b28] border border-[#1e3447] p-1 rounded-xl shrink-0">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(job)}
+                  title="Edit Job Role"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#1a3347] transition cursor-pointer"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(job)}
+                  title="Delete Job Role"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/40 transition cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <p className="mb-6 text-sm leading-7 text-slate-300 line-clamp-3">
           {job.description}

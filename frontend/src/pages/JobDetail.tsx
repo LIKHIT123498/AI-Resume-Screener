@@ -1,16 +1,19 @@
-import  { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Briefcase, FileText, Cpu, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Briefcase, FileText, Cpu, Users, Pencil, Trash2 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import type { Job, Candidate } from '../types';
 import { ResumeUploader } from '../components/ResumeUploader';
 import { CandidateTable } from '../components/CandidateTable';
+import { JobFormModal } from '../components/JobFormModal';
 
 export const JobDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const fetchJobData = async () => {
     try {
@@ -48,7 +51,41 @@ export const JobDetail = () => {
       </Link>
 
       <div className="mb-8 rounded-2xl border border-[#213548] bg-[#081b2a] p-8 shadow-[0_0_24px_rgba(15,23,42,0.45)]">
-        <h1 className="mb-3 text-3xl font-extrabold text-white">{job.title}</h1>
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h1 className="text-3xl font-extrabold text-white">{job.title}</h1>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Role
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  `Are you sure you want to delete "${job.title}"?\n\nAll candidate evaluations for this role will be permanently removed.`
+                );
+                if (!confirmed) return;
+                try {
+                  await apiClient.delete(`/jobs/${job.id}`);
+                  navigate(`/?portal=${job.role_type === 'non_technical' ? 'non_technical' : 'technical'}`);
+                } catch (err) {
+                  console.error('Failed to delete job:', err);
+                  alert('Failed to delete job. Check if backend is reachable.');
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-red-900/50 bg-red-950/40 px-3.5 py-2 text-xs font-semibold text-red-300 hover:bg-red-900/60 hover:text-red-100 transition cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Role
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-md border border-[#24534a] bg-[#12382f] px-3 py-1 text-sm font-bold uppercase tracking-wide text-[#8beec2]">
             {job.department || 'General'}
@@ -112,6 +149,16 @@ export const JobDetail = () => {
           <p className="mb-6 text-slate-300">Candidates autonomously evaluated against job requirements by AI.</p>
           <CandidateTable candidates={candidates} />
         </div>
+      )}
+
+      {/* --- EDIT JOB MODAL --- */}
+      {isEditModalOpen && (
+        <JobFormModal 
+          onClose={() => setIsEditModalOpen(false)} 
+          onSuccess={fetchJobData} 
+          jobToEdit={job}
+          initialRoleType={job.role_type || 'technical'}
+        />
       )}
     </div>
   );

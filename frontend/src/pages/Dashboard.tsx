@@ -10,6 +10,7 @@ export const Dashboard = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const portalParam = searchParams.get('portal');
@@ -18,6 +19,25 @@ export const Dashboard = () => {
 
   const handleSelectPortal = (selected: 'technical' | 'non_technical') => {
     setSearchParams({ portal: selected });
+  };
+
+  const handleEditJob = (job: Job) => {
+    setEditingJob(job);
+  };
+
+  const handleDeleteJob = async (job: Job) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${job.title}"?\n\nThis will permanently remove this job role and all its candidate evaluations.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await apiClient.delete(`/jobs/${job.id}`);
+      await fetchJobs();
+    } catch (error) {
+      console.error("Failed to delete job:", error);
+      alert("Failed to delete job. Check if backend is reachable.");
+    }
   };
 
   useEffect(() => {
@@ -221,17 +241,26 @@ export const Dashboard = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {displayedJobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobCard 
+              key={job.id} 
+              job={job} 
+              onEdit={handleEditJob}
+              onDelete={handleDeleteJob}
+            />
           ))}
         </div>
       )}
 
-      {/* --- CREATE JOB MODAL --- */}
-      {isModalOpen && (
+      {/* --- CREATE OR EDIT JOB MODAL --- */}
+      {(isModalOpen || editingJob) && (
         <JobFormModal 
-          onClose={() => setIsModalOpen(false)} 
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingJob(null);
+          }} 
           onSuccess={fetchJobs} 
           initialRoleType={portal}
+          jobToEdit={editingJob || undefined}
         />
       )}
     </div>
