@@ -74,7 +74,6 @@ export const Login: React.FC<Props> = ({ onLoginSuccess }) => {
               onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full rounded-xl border border-[#2d4256] bg-[#091c2d] px-4 py-2.5 text-white placeholder:text-slate-400 focus:border-[#2ad38a] focus:outline-none focus:ring-2 focus:ring-[#2ad38a]/40"
-              placeholder="recruiter@company.com"
             />
           </div>
 
