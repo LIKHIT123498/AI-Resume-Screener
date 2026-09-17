@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import logging
 from pathlib import Path
 import google.generativeai as genai
@@ -80,38 +81,47 @@ def screen_resume(resume_text: str, job_requirements: str) -> dict:
     }}
     """
     
-    try:
-        # Using the lite model to bypass the quota limit
-        model = genai.GenerativeModel(
-            model_name="gemini-3.5-flash-lite", 
-            generation_config={"temperature": 0.1}
-        )
-        
-        response = model.generate_content(prompt)
-        
-        # Bulletproof JSON cleaner to strip Markdown formatting
-        clean_text = response.text.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        elif clean_text.startswith("```"):
-            clean_text = clean_text[3:]
-        
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Using the lite model to bypass the quota limit
+            model = genai.GenerativeModel(
+                model_name="gemini-3.5-flash-lite", 
+                generation_config={"temperature": 0.1}
+            )
             
-        return json.loads(clean_text.strip())
-        
-    except Exception as e:
-        print(f"\n[AI Engine Error Details]: {repr(e)}\n")
-        return {
-            "overall_fit_score": 0.0,
-            "skills_score": 0.0,
-            "seniority_score": 0.0,
-            "domain_score": 0.0,
-            "company_changes": 0,
-            "avg_duration_months": 0.0,
-            "extracted_skills": [],
-            "red_flags": [f"AI Error: {str(e)}"],
-            "is_shortlisted": False,
-            "one_line_summary": "Error processing candidate."
-        }
+            response = model.generate_content(prompt)
+            
+            # Bulletproof JSON cleaner to strip Markdown formatting
+            clean_text = response.text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            elif clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+            
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+                
+            return json.loads(clean_text.strip())
+            
+        except Exception as e:
+            err_str = str(e).lower()
+            if ("429" in err_str or "quota" in err_str or "resourceexhausted" in err_str) and attempt < max_retries - 1:
+                wait_time = 3 * (attempt + 1)
+                logger.warning(f"Rate limit hit. Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait_time)
+                continue
+
+            print(f"\n[AI Engine Error Details]: {repr(e)}\n")
+            return {
+                "overall_fit_score": 0.0,
+                "skills_score": 0.0,
+                "seniority_score": 0.0,
+                "domain_score": 0.0,
+                "company_changes": 0,
+                "avg_duration_months": 0.0,
+                "extracted_skills": [],
+                "red_flags": [f"AI Error: {str(e)}"],
+                "is_shortlisted": False,
+                "one_line_summary": "Error processing candidate."
+            }
