@@ -107,13 +107,16 @@ def screen_resume(resume_text: str, job_requirements: str) -> dict:
         except Exception as e:
             err_str = str(e).lower()
             if ("429" in err_str or "quota" in err_str or "resourceexhausted" in err_str) and attempt < max_retries - 1:
-                wait_time = 3 * (attempt + 1)
+                wait_time = 8 * (attempt + 1)
                 logger.warning(f"Rate limit hit. Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                 time.sleep(wait_time)
                 continue
 
             print(f"\n[AI Engine Error Details]: {repr(e)}\n")
             return {
+                "name": None,
+                "email": None,
+                "phone": None,
                 "overall_fit_score": 0.0,
                 "skills_score": 0.0,
                 "seniority_score": 0.0,

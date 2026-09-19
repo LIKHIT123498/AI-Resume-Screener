@@ -13,7 +13,18 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = 2;
+
+  const getErrorMessage = (err: any): string => {
+    if (err?.response?.data?.detail) {
+      const detail = err.response.data.detail;
+      return typeof detail === 'string' ? detail : JSON.stringify(detail);
+    }
+    if (err?.response?.status) {
+      return `Server returned HTTP ${err.response.status} (${err.response.statusText || 'Error'})`;
+    }
+    return err?.message || 'Network request failed';
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -57,8 +68,10 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
     setIsUploading(true);
     setProgress({ current: 0, total: validFiles.length });
 
+    let processedCount = 0;
+    let lastError: string | null = null;
+
     try {
-      let processed = 0;
       for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
         const chunk = validFiles.slice(i, i + BATCH_SIZE);
         const formData = new FormData();
@@ -66,22 +79,48 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
           formData.append('files', file);
         }
 
-        await apiClient.post(`/screening/${jobId}/upload-resumes`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        let batchSucceeded = false;
+        // Attempt the batch, with 1 automatic retry on failure
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            await apiClient.post(`/screening/${jobId}/upload-resumes`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            batchSucceeded = true;
+            break;
+          } catch (err) {
+            lastError = getErrorMessage(err);
+            console.error(`Batch ${Math.floor(i / BATCH_SIZE) + 1} attempt ${attempt + 1} failed:`, err);
+            if (attempt === 0) {
+              // Wait 3 seconds before retrying this chunk
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+          }
+        }
 
-        processed += chunk.length;
-        setProgress({ current: processed, total: validFiles.length });
-        onUploadSuccess(); // Refresh the candidate table progressively after each batch!
+        if (batchSucceeded) {
+          processedCount += chunk.length;
+          setProgress({ current: processedCount, total: validFiles.length });
+          onUploadSuccess(); // Refresh candidate table progressively after every batch!
+        } else {
+          // If a batch fails after retry, record failure and break to report accurately
+          break;
+        }
 
-        // Small delay between batches to respect AI rate limits
+        // Small breathing delay between batches to stay within Gemini API rate limits
         if (i + BATCH_SIZE < validFiles.length) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Failed to process some resumes. Any previously processed candidates have been saved.');
+
+      if (lastError && processedCount === 0) {
+        alert(`Upload failed: ${lastError}\n\nNo resumes were saved. Please check if the server is awake and try again.`);
+      } else if (lastError && processedCount < validFiles.length) {
+        alert(`Partial upload: ${processedCount} of ${validFiles.length} resumes successfully screened and saved.\n\nRemaining files stopped due to: ${lastError}`);
+      }
+    } catch (unexpectedError) {
+      console.error('Unexpected upload error:', unexpectedError);
+      alert(`Unexpected error: ${getErrorMessage(unexpectedError)}`);
     } finally {
       setIsUploading(false);
       setProgress({ current: 0, total: 0 });
