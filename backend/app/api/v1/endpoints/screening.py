@@ -1,6 +1,7 @@
 import asyncio
+import time
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -15,6 +16,15 @@ from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# In-memory session store to combine multi-batch uploads into 1 single email digest
+_upload_sessions: dict[str, dict] = {}
+
+def _cleanup_old_sessions():
+    now = time.time()
+    expired = [sid for sid, data in _upload_sessions.items() if now - data.get("created_at", 0) > 600]
+    for sid in expired:
+        _upload_sessions.pop(sid, None)
 
 def safe_float(val, default: float = 0.0) -> float:
     if val is None:
@@ -111,6 +121,8 @@ async def upload_and_screen_resumes(
     job_id: int,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
+    session_id: Optional[str] = Form(None),
+    is_last_batch: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -155,22 +167,49 @@ async def upload_and_screen_resumes(
             db.rollback()
             logger.error(f"Database commit error for candidate: {db_err}")
 
-    # Queue email digest to the user's email in the background
-    if results and current_user.email:
-        candidate_summaries = [
-            {
-                "name": c.name,
-                "overall_fit_score": c.overall_fit_score,
-                "one_line_summary": c.one_line_summary
+    # Accumulate results across batches so 1 single email digest is sent per upload session
+    _cleanup_old_sessions()
+    
+    candidate_summaries = [
+        {
+            "name": c.name,
+            "overall_fit_score": c.overall_fit_score,
+            "one_line_summary": c.one_line_summary
+        }
+        for c in results
+    ]
+
+    current_session_key = f"{current_user.id}_{session_id}" if session_id else None
+
+    if current_session_key:
+        if current_session_key not in _upload_sessions:
+            _upload_sessions[current_session_key] = {
+                "candidates": [],
+                "attachments": [],
+                "created_at": time.time()
             }
-            for c in results
-        ]
-        background_tasks.add_task(
-            send_screening_digest_email,
-            recipient_email=current_user.email,
-            job_title=job.title,
-            candidates=candidate_summaries,
-            attachments=attachments
-        )
+        _upload_sessions[current_session_key]["candidates"].extend(candidate_summaries)
+        _upload_sessions[current_session_key]["attachments"].extend(attachments)
+
+    # Determine if we should trigger the combined email now
+    last_batch_flag = True if is_last_batch is None else (str(is_last_batch).lower() in ("true", "1", "yes"))
+
+    if last_batch_flag or not current_session_key:
+        if current_session_key and current_session_key in _upload_sessions:
+            session_data = _upload_sessions.pop(current_session_key)
+            all_candidates = session_data["candidates"]
+            all_attachments = session_data["attachments"]
+        else:
+            all_candidates = candidate_summaries
+            all_attachments = attachments
+
+        if all_candidates and current_user.email:
+            background_tasks.add_task(
+                send_screening_digest_email,
+                recipient_email=current_user.email,
+                job_title=job.title,
+                candidates=all_candidates,
+                attachments=all_attachments
+            )
 
     return {"processed_count": len(results), "candidates": results}

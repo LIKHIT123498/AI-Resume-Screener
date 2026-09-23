@@ -68,16 +68,20 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
     setIsUploading(true);
     setProgress({ current: 0, total: validFiles.length });
 
+    const sessionId = 'session_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
     let processedCount = 0;
     let lastError: string | null = null;
 
     try {
       for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
+        const isLastBatch = (i + BATCH_SIZE >= validFiles.length);
         const chunk = validFiles.slice(i, i + BATCH_SIZE);
         const formData = new FormData();
         for (const file of chunk) {
           formData.append('files', file);
         }
+        formData.append('session_id', sessionId);
+        formData.append('is_last_batch', isLastBatch ? 'true' : 'false');
 
         let batchSucceeded = false;
         // Attempt the batch, with 1 automatic retry on failure

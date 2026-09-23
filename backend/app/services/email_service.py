@@ -128,14 +128,23 @@ def send_screening_digest_email(
         html_content = build_email_html(job_title, candidates)
         msg.attach(MIMEText(html_content, "html"))
 
-        # Attach resumes
+        # Attach resumes (stay under email provider 18MB total mime limit)
+        total_attach_bytes = 0
+        MAX_ATTACH_BYTES = 18 * 1024 * 1024  # 18 MB limit
+
         for filename, file_bytes in attachments:
             if not file_bytes:
+                continue
+            if total_attach_bytes + len(file_bytes) > MAX_ATTACH_BYTES:
+                logger.warning(
+                    f"Attachment {filename} skipped to stay within email provider size limit ({MAX_ATTACH_BYTES} bytes)."
+                )
                 continue
             try:
                 part = MIMEApplication(file_bytes, Name=filename)
                 part["Content-Disposition"] = f'attachment; filename="{filename}"'
                 msg.attach(part)
+                total_attach_bytes += len(file_bytes)
             except Exception as attach_err:
                 logger.error(f"Failed to attach resume {filename}: {attach_err}")
 
