@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -9,6 +9,7 @@ from app.models.job import Job
 from app.models.candidate import Candidate
 from app.services.parser import extract_text_from_file
 from app.services.ai_engine import screen_resume, calculate_overall_fit
+from app.services.email_service import send_screening_digest_email
 from app.models.user import User
 from app.api.deps import get_current_user
 
@@ -82,20 +83,24 @@ async def process_single_file(
             red_flags = []
 
         return {
-            "job_id": job_id,
-            "name": str(name_val)[:250],
-            "email": str(evaluation.get("email"))[:250] if evaluation.get("email") else None,
-            "phone": str(evaluation.get("phone"))[:45] if evaluation.get("phone") else None,
-            "overall_fit_score": overall_fit_score,
-            "skills_score": skills_score,
-            "seniority_score": seniority_score,
-            "domain_score": domain_score,
-            "company_changes": safe_int(evaluation.get("company_changes"), 0),
-            "avg_duration_months": safe_float(evaluation.get("avg_duration_months"), 0.0),
-            "extracted_skills": extracted_skills,
-            "red_flags": red_flags,
-            "is_shortlisted": 1 if overall_fit_score >= 70.0 else 0,
-            "one_line_summary": summary_val
+            "candidate": {
+                "job_id": job_id,
+                "name": str(name_val)[:250],
+                "email": str(evaluation.get("email"))[:250] if evaluation.get("email") else None,
+                "phone": str(evaluation.get("phone"))[:45] if evaluation.get("phone") else None,
+                "overall_fit_score": overall_fit_score,
+                "skills_score": skills_score,
+                "seniority_score": seniority_score,
+                "domain_score": domain_score,
+                "company_changes": safe_int(evaluation.get("company_changes"), 0),
+                "avg_duration_months": safe_float(evaluation.get("avg_duration_months"), 0.0),
+                "extracted_skills": extracted_skills,
+                "red_flags": red_flags,
+                "is_shortlisted": 1 if overall_fit_score >= 70.0 else 0,
+                "one_line_summary": summary_val
+            },
+            "filename": file.filename,
+            "file_bytes": contents
         }
     except Exception as err:
         logger.error(f"Error processing candidate file {file.filename}: {err}")
@@ -104,6 +109,7 @@ async def process_single_file(
 @router.post("/{job_id}/upload-resumes")
 async def upload_and_screen_resumes(
     job_id: int,
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -133,17 +139,38 @@ async def upload_and_screen_resumes(
     candidate_data_list = await asyncio.gather(*tasks, return_exceptions=False)
 
     results = []
-    for candidate_data in candidate_data_list:
-        if not candidate_data:
+    attachments = []
+    for item in candidate_data_list:
+        if not item:
             continue
         try:
-            candidate = Candidate(**candidate_data)
+            candidate = Candidate(**item["candidate"])
             db.add(candidate)
             db.commit()
             db.refresh(candidate)
             results.append(candidate)
+            if item.get("filename") and item.get("file_bytes"):
+                attachments.append((item["filename"], item["file_bytes"]))
         except Exception as db_err:
             db.rollback()
             logger.error(f"Database commit error for candidate: {db_err}")
+
+    # Queue email digest to the user's email in the background
+    if results and current_user.email:
+        candidate_summaries = [
+            {
+                "name": c.name,
+                "overall_fit_score": c.overall_fit_score,
+                "one_line_summary": c.one_line_summary
+            }
+            for c in results
+        ]
+        background_tasks.add_task(
+            send_screening_digest_email,
+            recipient_email=current_user.email,
+            job_title=job.title,
+            candidates=candidate_summaries,
+            attachments=attachments
+        )
 
     return {"processed_count": len(results), "candidates": results}
