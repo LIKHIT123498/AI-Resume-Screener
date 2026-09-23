@@ -90,7 +90,7 @@ def screen_resume(resume_text: str, job_requirements: str) -> dict:
                 generation_config={"temperature": 0.1}
             )
             
-            response = model.generate_content(prompt)
+            response = model.generate_content(prompt, request_options={"timeout": 60})
             
             # Bulletproof JSON cleaner to strip Markdown formatting
             clean_text = response.text.strip()
@@ -106,9 +106,15 @@ def screen_resume(resume_text: str, job_requirements: str) -> dict:
             
         except Exception as e:
             err_str = str(e).lower()
-            if ("429" in err_str or "quota" in err_str or "resourceexhausted" in err_str) and attempt < max_retries - 1:
-                wait_time = 8 * (attempt + 1)
-                logger.warning(f"Rate limit hit. Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
+            is_rate_limit = any(k in err_str for k in ("429", "quota", "resourceexhausted"))
+            is_timeout_or_busy = any(k in err_str for k in ("504", "deadline", "timeout", "503", "unavailable", "overloaded"))
+
+            if (is_rate_limit or is_timeout_or_busy) and attempt < max_retries - 1:
+                wait_time = (8 * (attempt + 1)) if is_rate_limit else (2 * (attempt + 1))
+                logger.warning(
+                    f"Transient AI error ({'Rate limit' if is_rate_limit else 'Timeout/504'}). "
+                    f"Retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})..."
+                )
                 time.sleep(wait_time)
                 continue
 
