@@ -139,14 +139,22 @@ def send_screening_digest_email(
             except Exception as attach_err:
                 logger.error(f"Failed to attach resume {filename}: {attach_err}")
 
-        # Send via SMTP
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+        # Send via SMTP (support both STARTTLS port 587 and SSL port 465)
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
+            server.ehlo()
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
             server.ehlo()
             if smtp_port in (587, 25):
                 server.starttls()
                 server.ehlo()
+
+        try:
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
+        finally:
+            server.quit()
 
         logger.info(f"Successfully sent screening digest email for '{job_title}' to {recipient_email}")
         return True
