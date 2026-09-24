@@ -12,14 +12,14 @@ logger = logging.getLogger(__name__)
 
 def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: Optional[str] = None) -> str:
     """
-    Builds a clean, responsive HTML email listing the screened candidates
-    and indicating that their original resume files (PDF/DOC) are attached.
-    1-line AI summary is removed as requested since it is displayed on the portal.
+    Builds a clean, responsive HTML email containing candidate fit scores,
+    1-line AI summaries, and indicating attached original resume files (PDF/DOC).
     """
     candidate_rows = ""
     for candidate in candidates:
         name = candidate.get("name") or "Candidate"
         fit_score = candidate.get("overall_fit_score", 0.0)
+        summary = candidate.get("one_line_summary") or "No summary generated."
         
         # Color coding for fit score
         if fit_score >= 70:
@@ -36,17 +36,25 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
             badge_border = "#fca5a5"
 
         candidate_rows += f"""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 20px;">📄</span>
-                <div>
-                    <h3 style="margin: 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
-                    <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Original resume attached</p>
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">📄</span>
+                    <div>
+                        <h3 style="margin: 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
+                        <span style="font-size: 11px; color: #64748b; font-weight: 500;">Original resume file attached</span>
+                    </div>
                 </div>
+                <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 9999px;">
+                    {fit_score:.1f}% Fit
+                </span>
             </div>
-            <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 9999px;">
-                {fit_score:.1f}% Fit
-            </span>
+            <div style="background: #f8fafc; border-left: 3px solid #0284c7; padding: 9px 12px; border-radius: 4px; margin-top: 6px;">
+                <span style="font-size: 10px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px;">1-Line AI Summary</span>
+                <p style="margin: 3px 0 0 0; color: #334155; font-size: 13px; line-height: 1.45;">
+                    {summary}
+                </p>
+            </div>
         </div>
         """
 
@@ -70,7 +78,7 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
             <!-- Header -->
             <div style="background: #081b2a; padding: 24px; text-align: left; border-bottom: 3px solid #2ad38a;">
                 <div style="font-size: 12px; color: #7ef0be; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">AI Resume Screener</div>
-                <h1 style="margin: 6px 0 0 0; color: #ffffff; font-size: 20px; font-weight: 800;">Candidate Resumes Attached</h1>
+                <h1 style="margin: 6px 0 0 0; color: #ffffff; font-size: 20px; font-weight: 800;">Candidate Screening Digest</h1>
                 <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 14px;">Role: <strong style="color: #f8fafc;">{job_title}</strong></p>
             </div>
 
@@ -78,7 +86,7 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
             <div style="padding: 24px; background: #f8fafc;">
                 {notice_html}
                 <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569;">
-                    The original resume files (PDF/DOC) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email. Detailed AI evaluation criteria and summaries can be viewed on your portal dashboard.
+                    The original resume files (PDF/DOC) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email along with their 1-line AI evaluation summaries and fit scores:
                 </p>
                 {candidate_rows}
             </div>
@@ -103,7 +111,7 @@ def _send_via_resend(
     """
     Sends email via the Resend HTTP API (Port 443).
     Bypasses outbound SMTP port blocks on Render, AWS, and other cloud providers.
-    Attaches the original candidate resume files (PDF/DOC/DOCX).
+    Attaches the original candidate resume files (PDF/DOC/DOCX) and includes 1-line AI summaries.
     """
     attachments = attachments or []
     from_sender = os.getenv("RESEND_FROM_EMAIL", "AI Resume Screener <onboarding@resend.dev>")
@@ -127,7 +135,7 @@ def _send_via_resend(
         notice = (
             f"{len(attached_files)} of {len(attachments)} resume files attached. "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
-            f"All {len(candidates)} candidates are listed below."
+            f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
         notice = f"All {len(attached_files)} original resume file(s) are attached to this email."
@@ -139,7 +147,7 @@ def _send_via_resend(
     payload = {
         "from": from_sender,
         "to": [target_recipient],
-        "subject": f"[{job_title}] {len(candidates)} Candidate Resume(s) Attached",
+        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - Resumes & AI Summaries Attached",
         "html": html_content,
     }
 
@@ -164,7 +172,7 @@ def _send_via_resend(
             timeout=30
         )
         if resp.status_code in (200, 201):
-            logger.info(f"Successfully delivered resume digest email via Resend to {target_recipient}")
+            logger.info(f"Successfully delivered screening digest email via Resend to {target_recipient}")
             return True
 
         logger.warning(f"Resend API error {resp.status_code}: {resp.text}")
@@ -268,7 +276,7 @@ def _send_via_smtp(
     """
     Sends email via traditional SMTP.
     Used for local development or cloud environments where SMTP egress is permitted.
-    Attaches the original candidate resume files (PDF/DOC/DOCX).
+    Attaches the original candidate resume files (PDF/DOC/DOCX) and includes 1-line AI summaries.
     """
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port_raw = os.getenv("SMTP_PORT", "587")
@@ -309,7 +317,7 @@ def _send_via_smtp(
         notice = (
             f"{len(attached_files)} of {len(attachments)} resume files attached. "
             f"({skipped_count} attachment(s) were omitted to keep the message within email provider delivery limits). "
-            f"All {len(candidates)} candidates are listed below."
+            f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
         notice = f"All {len(attached_files)} original resume file(s) are attached to this email."
@@ -317,7 +325,7 @@ def _send_via_smtp(
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{smtp_user}>"
     msg["To"] = recipient_email
-    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate Resume(s) Attached"
+    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - Resumes & AI Summaries Attached"
 
     html_content = build_email_html(job_title, candidates, notice=notice)
     msg.attach(MIMEText(html_content, "html"))
@@ -355,11 +363,11 @@ def _send_via_smtp(
         fallback_msg = MIMEMultipart()
         fallback_msg["From"] = f"{from_name} <{smtp_user}>"
         fallback_msg["To"] = recipient_email
-        fallback_msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate Resume(s) Attached"
+        fallback_msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - Resumes & AI Summaries Attached"
 
         fallback_notice = (
             "Resume attachments were omitted due to mail delivery constraints. "
-            f"All {len(candidates)} candidate evaluations are detailed below."
+            f"All {len(candidates)} candidate evaluations, scores, and 1-line AI summaries are detailed below."
         )
         fallback_html = build_email_html(job_title, candidates, notice=fallback_notice)
         fallback_msg.attach(MIMEText(fallback_html, "html"))
@@ -390,6 +398,7 @@ def send_screening_digest_email(
     1. If RESEND_API_KEY is configured: Uses Resend HTTP API (Port 443),
        which works reliably on Render Free Tier where outbound SMTP ports are blocked.
     2. Otherwise: Uses SMTP (ports 587/465), suitable for localhost or non-blocked hosts.
+    Includes both the 1-line AI summaries and attached resume files.
     """
     if not recipient_email or not candidates:
         logger.info("No recipient email or candidates provided for email digest.")

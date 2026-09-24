@@ -192,12 +192,17 @@ async def send_test_email(
         }
     ]
 
+    sample_attachments = [
+        ("alex_morgan_resume.pdf", b"%PDF-1.4 sample resume content for Alex Morgan\n"),
+        ("taylor_swift_resume.pdf", b"%PDF-1.4 sample resume content for Taylor Swift\n")
+    ]
+
     success = await run_in_threadpool(
         send_screening_digest_email,
         recipient_email=target_email,
         job_title="Diagnostic Test Run",
         candidates=sample_candidates,
-        attachments=[]
+        attachments=sample_attachments
     )
 
     if not success:
