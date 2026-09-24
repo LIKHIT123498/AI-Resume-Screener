@@ -142,8 +142,21 @@ def get_email_status():
     resend_key = os.getenv("RESEND_API_KEY")
     masked_resend = f"{resend_key[:6]}..." if resend_key else None
 
+    gmail_relay_url = os.getenv("GMAIL_RELAY_URL")
+    masked_relay = f"{gmail_relay_url[:35]}..." if gmail_relay_url else None
+
+    active_provider = (
+        "gmail_relay" if gmail_relay_url else (
+            "resend_api" if resend_key else (
+                "smtp" if (smtp_user and smtp_password) else "none"
+            )
+        )
+    )
+
     return {
-        "active_provider": "resend_api" if resend_key else ("smtp" if (smtp_user and smtp_password) else "none"),
+        "active_provider": active_provider,
+        "gmail_relay_configured": bool(gmail_relay_url),
+        "gmail_relay_preview": masked_relay,
         "resend_configured": bool(resend_key),
         "resend_key_preview": masked_resend,
         "smtp_configured": bool(smtp_user and smtp_password),
@@ -151,7 +164,7 @@ def get_email_status():
         "smtp_port": smtp_port,
         "smtp_user": masked,
         "render_smtp_blocked": True,
-        "note": "Render free tier blocks outbound SMTP ports 25, 465, 587. Configure RESEND_API_KEY in Render Environment for 100% reliable HTTPS email delivery."
+        "note": "Render free tier blocks outbound SMTP ports 25, 465, 587. GMAIL_RELAY_URL or RESEND_API_KEY provides reliable HTTPS email delivery over Port 443."
     }
 
 @router.get("/smtp-check")

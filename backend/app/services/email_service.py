@@ -259,6 +259,88 @@ def _send_via_resend(
         logger.error(f"Resend HTTP request exception: {e}")
         return False
 
+def _send_via_gmail_relay(
+    relay_url: str,
+    recipient_email: str,
+    job_title: str,
+    candidates: List[Dict[str, Any]],
+    attachments: Optional[List[Tuple[str, bytes]]] = None
+) -> bool:
+    """
+    Sends email via a Google Apps Script HTTPS Webhook (Port 443).
+    Delivers directly from the user's Gmail account (e.g. likhitnikam@gmail.com)
+    to ANY recipient without needing a custom domain or hitting Render's SMTP port blocks.
+    """
+    attachments = attachments or []
+    total_attach_bytes = 0
+    MAX_ATTACH_BYTES = 18 * 1024 * 1024  # 18 MB limit (stays safely within 25MB Gmail limits)
+    attached_files = []
+    skipped_count = 0
+
+    for fname, fbytes in attachments:
+        if not fbytes:
+            continue
+        if total_attach_bytes + len(fbytes) > MAX_ATTACH_BYTES:
+            skipped_count += 1
+            continue
+        attached_files.append((fname, fbytes))
+        total_attach_bytes += len(fbytes)
+
+    notice: Optional[str] = None
+    if skipped_count > 0:
+        notice = (
+            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
+            f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
+            f"All {len(candidates)} candidates and 1-line summaries are listed below."
+        )
+    elif attached_files:
+        notice = f"📎 <strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
+
+    has_attachments = bool(attached_files)
+    html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
+
+    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
+    payload = {
+        "to": recipient_email,
+        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}",
+        "html": html_content,
+        "attachments": [
+            {
+                "filename": fname,
+                "content": base64.b64encode(fbytes).decode("utf-8"),
+                "contentType": "application/pdf" if fname.lower().endswith(".pdf") else "application/octet-stream"
+            }
+            for fname, fbytes in attached_files
+        ]
+    }
+
+    try:
+        logger.info(f"Delivering email via Gmail HTTPS Relay to {recipient_email} ({len(attached_files)} attachments)...")
+        session = requests.Session()
+        resp = session.post(
+            relay_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            allow_redirects=True,
+            timeout=45
+        )
+        if resp.status_code in (200, 201, 302):
+            try:
+                res_json = resp.json()
+                if res_json.get("status") == "error":
+                    logger.error(f"Gmail Relay returned error: {res_json.get('message')}")
+                    return False
+            except Exception:
+                pass
+            logger.info(f"Successfully delivered email via Gmail HTTPS Relay to {recipient_email}")
+            return True
+        else:
+            logger.warning(f"Gmail Relay returned HTTP {resp.status_code}: {resp.text}")
+            return False
+    except Exception as e:
+        logger.error(f"Exception during Gmail Relay request: {e}")
+        return False
+
 def _create_smtp_session(host: str, preferred_port: int, timeout: int = 25):
     """
     Establishes an SMTP connection with intelligent fallback between
@@ -423,15 +505,33 @@ def send_screening_digest_email(
 ) -> bool:
     """
     Unified email dispatcher:
-    1. If RESEND_API_KEY is configured: Uses Resend HTTP API (Port 443),
-       which works reliably on Render Free Tier where outbound SMTP ports are blocked.
-    2. Otherwise: Uses SMTP (ports 587/465), suitable for localhost or non-blocked hosts.
+    1. GMAIL_RELAY_URL (Priority 1): Google Apps Script HTTPS webhook (Port 443).
+       Sends directly from the user's Gmail account (likhitnikam@gmail.com) to ANY recipient,
+       completely free, bypassing Render's SMTP block without needing a custom domain.
+    2. RESEND_API_KEY (Priority 2): Resend HTTP API (Port 443).
+       Used if configured; redirects sandbox testing emails to the account owner.
+    3. SMTP (Priority 3): Traditional SMTP (ports 587/465), suitable for localhost.
     Includes both the 1-line AI summaries and attached resume files.
     """
     if not recipient_email or not candidates:
         logger.info("No recipient email or candidates provided for email digest.")
         return False
 
+    # 1. Check Gmail HTTPS Relay (sends from personal Gmail to ANY recipient over Port 443)
+    gmail_relay_url = os.getenv("GMAIL_RELAY_URL")
+    if gmail_relay_url and gmail_relay_url.startswith("http"):
+        success = _send_via_gmail_relay(
+            relay_url=gmail_relay_url,
+            recipient_email=recipient_email,
+            job_title=job_title,
+            candidates=candidates,
+            attachments=attachments
+        )
+        if success:
+            return True
+        logger.warning("Gmail Relay delivery failed, falling back to alternative provider...")
+
+    # 2. Check Resend API
     resend_api_key = os.getenv("RESEND_API_KEY")
     if resend_api_key:
         return _send_via_resend(
@@ -442,6 +542,7 @@ def send_screening_digest_email(
             attachments=attachments
         )
 
+    # 3. Fallback to direct SMTP
     return _send_via_smtp(
         recipient_email=recipient_email,
         job_title=job_title,
