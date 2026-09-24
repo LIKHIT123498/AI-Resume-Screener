@@ -135,9 +135,11 @@ def _send_via_resend(
 
     html_content = build_email_html(job_title, candidates, notice=notice)
 
+    target_recipient = os.getenv("RESEND_RECIPIENT_OVERRIDE") or recipient_email
+
     payload = {
         "from": from_sender,
-        "to": [recipient_email],
+        "to": [target_recipient],
         "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - AI Summary",
         "html": html_content,
     }
@@ -163,27 +165,63 @@ def _send_via_resend(
             timeout=30
         )
         if resp.status_code in (200, 201):
-            logger.info(f"Successfully delivered screening digest email via Resend to {recipient_email}")
+            logger.info(f"Successfully delivered screening digest email via Resend to {target_recipient}")
             return True
-        else:
-            logger.warning(f"Resend API error {resp.status_code}: {resp.text}")
-            # If rejected due to payload size, retry without attachments
-            if payload.get("attachments"):
-                logger.info("Retrying Resend send without attachments...")
-                payload.pop("attachments")
-                retry_resp = requests.post(
+
+        logger.warning(f"Resend API error {resp.status_code}: {resp.text}")
+
+        # Case A: Resend Free Tier sandbox limitation
+        # "You can only send testing emails to your own email address (owner@gmail.com)..."
+        if resp.status_code == 403 and "only send testing emails to your own email address" in resp.text:
+            import re
+            match = re.search(r'\(([^)]+@[^)]+)\)', resp.text)
+            sandbox_owner = match.group(1) if match else None
+            if sandbox_owner and sandbox_owner.lower() != target_recipient.lower():
+                logger.warning(
+                    f"Resend sandbox limitation: cannot deliver to {target_recipient}. "
+                    f"Automatically redirecting to Resend account owner: {sandbox_owner}..."
+                )
+                sandbox_notice = (
+                    f"Delivered to your Resend account email ({sandbox_owner}) because "
+                    f"onboarding@resend.dev is in test sandbox mode. "
+                    f"(Intended recipient was: {target_recipient}). "
+                    f"To deliver directly to {target_recipient}, sign up for Resend using {target_recipient} "
+                    f"or verify your custom domain."
+                )
+                payload["to"] = [sandbox_owner]
+                payload["html"] = build_email_html(job_title, candidates, notice=sandbox_notice)
+                redirect_resp = requests.post(
                     "https://api.resend.com/emails",
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json"
                     },
                     json=payload,
-                    timeout=20
+                    timeout=30
                 )
-                if retry_resp.status_code in (200, 201):
-                    logger.info(f"Successfully delivered fallback digest email via Resend to {recipient_email}")
+                if redirect_resp.status_code in (200, 201):
+                    logger.info(f"Successfully redirected email to Resend account owner {sandbox_owner}")
                     return True
-            return False
+                else:
+                    logger.warning(f"Redirect attempt error: {redirect_resp.status_code}: {redirect_resp.text}")
+
+        # Case B: If rejected due to payload size, retry without attachments
+        if payload.get("attachments"):
+            logger.info("Retrying Resend send without attachments...")
+            payload.pop("attachments")
+            retry_resp = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+                timeout=20
+            )
+            if retry_resp.status_code in (200, 201):
+                logger.info(f"Successfully delivered fallback digest email via Resend to {payload['to']}")
+                return True
+        return False
     except Exception as e:
         logger.error(f"Resend HTTP request exception: {e}")
         return False

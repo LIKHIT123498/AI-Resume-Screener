@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Briefcase, FileText, Cpu, Users, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Briefcase, FileText, Cpu, Users, Pencil, Trash2, Mail } from 'lucide-react';
 import { apiClient } from '../api/client';
 import type { Job, Candidate } from '../types';
 import { ResumeUploader } from '../components/ResumeUploader';
@@ -14,6 +14,7 @@ export const JobDetail = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const fetchJobData = async () => {
     try {
@@ -55,6 +56,26 @@ export const JobDetail = () => {
           <h1 className="text-3xl font-extrabold text-white">{job.title}</h1>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={isSendingEmail || candidates.length === 0}
+              onClick={async () => {
+                setIsSendingEmail(true);
+                try {
+                  const res = await apiClient.post(`/screening/${job.id}/resend-digest-email`);
+                  alert(res.data?.message || 'Candidate digest email has been queued and sent to your email!');
+                } catch (err: any) {
+                  alert(`Error sending email: ${err?.response?.data?.detail || err.message}`);
+                } finally {
+                  setIsSendingEmail(false);
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-[#2ad38a]/40 bg-[#0e3a2f]/80 px-3.5 py-2 text-xs font-semibold text-[#7ef0be] hover:bg-[#134d3f] transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={candidates.length === 0 ? 'No candidates to email yet' : 'Email summary of all candidates to registered user'}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              {isSendingEmail ? 'Sending...' : 'Email Digest'}
+            </button>
             <button
               type="button"
               onClick={() => setIsEditModalOpen(true)}

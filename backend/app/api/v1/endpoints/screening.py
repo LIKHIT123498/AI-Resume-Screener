@@ -240,6 +240,53 @@ def finalize_upload_session(
         return {"finalized": True, "candidates_count": len(candidates)}
     return {"finalized": False, "message": "Session not found or already dispatched."}
 
+@router.post("/{job_id}/resend-digest-email")
+def resend_job_digest_email(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    to_email: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Sends or re-sends the candidate screening digest email for any job,
+    fetching all candidates currently saved in the database for that job.
+    """
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found or unauthorized.")
+
+    candidates = db.query(Candidate).filter(Candidate.job_id == job_id).all()
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No candidates found for this job yet.")
+
+    candidate_summaries = [
+        {
+            "name": c.name,
+            "overall_fit_score": c.overall_fit_score,
+            "one_line_summary": c.one_line_summary
+        }
+        for c in candidates
+    ]
+
+    target = to_email or current_user.email
+    if not target:
+        raise HTTPException(status_code=400, detail="No recipient email address.")
+
+    logger.info(f"Queuing resend of screening digest for job {job_id} ({len(candidates)} candidates) to {target}...")
+    background_tasks.add_task(
+        send_screening_digest_email,
+        recipient_email=target,
+        job_title=job.title,
+        candidates=candidate_summaries,
+        attachments=[]
+    )
+
+    return {
+        "success": True,
+        "message": f"Screening digest email queued for {len(candidates)} candidate(s) to {target}."
+    }
+
 @router.post("/{job_id}/upload-resumes")
 async def upload_and_screen_resumes(
     job_id: int,
