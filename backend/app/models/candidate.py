@@ -1,9 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime, LargeBinary
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
-# IMPORTANT: Adjust this import to wherever your Base is defined! 
-# (e.g., from app.database import Base)
 from app.core.database import Base
 
 class Candidate(Base):
@@ -31,3 +28,14 @@ class Candidate(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     job = relationship("Job", back_populates="candidates")
+
+class ResumeFile(Base):
+    __tablename__ = "resume_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    candidate_id = Column(Integer, ForeignKey("candidates.id", ondelete="CASCADE"), nullable=True, index=True)
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    file_bytes = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
