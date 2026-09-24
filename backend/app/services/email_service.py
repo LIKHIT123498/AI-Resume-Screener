@@ -1,6 +1,8 @@
 import os
 import smtplib
 import logging
+import base64
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
@@ -93,10 +95,103 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
     """
     return html
 
-def _create_smtp_session(host: str, preferred_port: int, timeout: int = 45):
+def _send_via_resend(
+    api_key: str,
+    recipient_email: str,
+    job_title: str,
+    candidates: List[Dict[str, Any]],
+    attachments: Optional[List[Tuple[str, bytes]]] = None
+) -> bool:
+    """
+    Sends email via the Resend HTTP API (Port 443).
+    Bypasses outbound SMTP port blocks on Render, AWS, and other cloud providers.
+    """
+    attachments = attachments or []
+    from_sender = os.getenv("RESEND_FROM_EMAIL", "AI Resume Screener <onboarding@resend.dev>")
+    
+    total_attach_bytes = 0
+    MAX_ATTACH_BYTES = 10 * 1024 * 1024  # 10 MB limit
+    attached_files = []
+    skipped_count = 0
+
+    for fname, fbytes in attachments:
+        if not fbytes:
+            continue
+        if total_attach_bytes + len(fbytes) > MAX_ATTACH_BYTES:
+            skipped_count += 1
+            continue
+        attached_files.append((fname, fbytes))
+        total_attach_bytes += len(fbytes)
+
+    notice: Optional[str] = None
+    if skipped_count > 0:
+        notice = (
+            f"{len(attached_files)} of {len(attachments)} resume files attached. "
+            f"{skipped_count} attachment(s) were omitted to stay within email delivery limits. "
+            f"All {len(candidates)} candidate summaries and fit scores are included below."
+        )
+    elif attached_files:
+        notice = f"The {len(attached_files)} original resume file(s) are attached to this email."
+
+    html_content = build_email_html(job_title, candidates, notice=notice)
+
+    payload = {
+        "from": from_sender,
+        "to": [recipient_email],
+        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - AI Summary",
+        "html": html_content,
+    }
+
+    if attached_files:
+        payload["attachments"] = [
+            {
+                "filename": fname,
+                "content": base64.b64encode(fbytes).decode("utf-8")
+            }
+            for fname, fbytes in attached_files
+        ]
+
+    try:
+        logger.info(f"Sending email via Resend HTTP API (Port 443) to {recipient_email} ({len(attached_files)} attachments)...")
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=30
+        )
+        if resp.status_code in (200, 201):
+            logger.info(f"Successfully delivered screening digest email via Resend to {recipient_email}")
+            return True
+        else:
+            logger.warning(f"Resend API error {resp.status_code}: {resp.text}")
+            # If rejected due to payload size, retry without attachments
+            if payload.get("attachments"):
+                logger.info("Retrying Resend send without attachments...")
+                payload.pop("attachments")
+                retry_resp = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload,
+                    timeout=20
+                )
+                if retry_resp.status_code in (200, 201):
+                    logger.info(f"Successfully delivered fallback digest email via Resend to {recipient_email}")
+                    return True
+            return False
+    except Exception as e:
+        logger.error(f"Resend HTTP request exception: {e}")
+        return False
+
+def _create_smtp_session(host: str, preferred_port: int, timeout: int = 25):
     """
     Establishes an SMTP connection with intelligent fallback between
-    SSL (port 465) and STARTTLS (port 587) to prevent timeouts on cloud hosts.
+    SSL (port 465) and STARTTLS (port 587).
     """
     ports_to_try = [preferred_port]
     if preferred_port == 587 and 465 not in ports_to_try:
@@ -115,7 +210,7 @@ def _create_smtp_session(host: str, preferred_port: int, timeout: int = 45):
                 server.ehlo()
                 return server
             else:
-                server = smtplib.SMTP(host, port, timeout=min(timeout, 12))
+                server = smtplib.SMTP(host, port, timeout=min(timeout, 10))
                 server.ehlo()
                 if port in (587, 25):
                     server.starttls()
@@ -127,22 +222,16 @@ def _create_smtp_session(host: str, preferred_port: int, timeout: int = 45):
 
     raise ConnectionError(f"Could not connect to SMTP server {host} on any port ({ports_to_try}): {last_err}")
 
-def send_screening_digest_email(
+def _send_via_smtp(
     recipient_email: str,
     job_title: str,
     candidates: List[Dict[str, Any]],
     attachments: Optional[List[Tuple[str, bytes]]] = None
 ) -> bool:
     """
-    Sends an email with candidate fit scores, 1-line AI summaries,
-    and attached resume files to the registered user's email.
-    Includes a resilient fallback to send without attachments if file sizes
-    or slow SMTP network causes an issue.
+    Sends email via traditional SMTP.
+    Used for local development or cloud environments where SMTP egress is permitted.
     """
-    if not recipient_email or not candidates:
-        logger.info("No recipient email or candidates provided for email digest.")
-        return False
-
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port_raw = os.getenv("SMTP_PORT", "587")
     try:
@@ -154,18 +243,16 @@ def send_screening_digest_email(
     smtp_password = os.getenv("SMTP_PASSWORD")
     from_name = os.getenv("SMTP_FROM_NAME", "AI Resume Screener")
 
-    # If SMTP is not yet configured, log a helpful guide and return cleanly
     if not smtp_user or not smtp_password:
         logger.warning(
-            f"SMTP_USER or SMTP_PASSWORD is not configured in environment. "
-            f"Skipping email to {recipient_email}. "
-            f"To enable email delivery on Render/production, set SMTP_USER and SMTP_PASSWORD in Dashboard -> Environment."
+            f"Neither RESEND_API_KEY nor SMTP credentials (SMTP_USER/SMTP_PASSWORD) are configured. "
+            f"Skipping email delivery to {recipient_email}."
         )
         return False
 
     attachments = attachments or []
     total_attach_bytes = 0
-    MAX_ATTACH_BYTES = 10 * 1024 * 1024  # 10 MB raw limit (safe for Gmail 25MB total mime ceiling)
+    MAX_ATTACH_BYTES = 10 * 1024 * 1024  # 10 MB raw limit
 
     attached_files: List[Tuple[str, bytes]] = []
     skipped_count = 0
@@ -189,7 +276,6 @@ def send_screening_digest_email(
     elif attached_files:
         notice = f"The {len(attached_files)} original resume file(s) are attached to this email."
 
-    # Build primary email message with attachments
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{smtp_user}>"
     msg["To"] = recipient_email
@@ -206,13 +292,10 @@ def send_screening_digest_email(
         except Exception as attach_err:
             logger.error(f"Failed to attach resume {filename}: {attach_err}")
 
-    # Step 1: Attempt sending with attachments (75s timeout)
+    # Primary attempt: send with attachments
     try:
-        logger.info(
-            f"Connecting to SMTP {smtp_host}:{smtp_port} to deliver {len(candidates)} candidates "
-            f"({len(attached_files)} attachments, {total_attach_bytes / 1024:.1f} KB) to {recipient_email}..."
-        )
-        server = _create_smtp_session(smtp_host, smtp_port, timeout=75)
+        logger.info(f"Connecting to SMTP {smtp_host}:{smtp_port} to deliver to {recipient_email}...")
+        server = _create_smtp_session(smtp_host, smtp_port, timeout=30)
         try:
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
@@ -223,15 +306,13 @@ def send_screening_digest_email(
                 server.quit()
             except Exception:
                 pass
-
     except Exception as primary_err:
         logger.warning(
-            f"Failed to send email with attachments to {recipient_email}: {primary_err}. "
-            f"Initiating resilient fallback: delivering HTML summaries without attachments..."
+            f"Failed to send email with attachments via SMTP ({primary_err}). "
+            f"Attempting fallback send without attachments..."
         )
 
-    # Step 2: Resilient Fallback - Send without attachments
-    # This guarantees the user ALWAYS gets the candidate evaluations, scores, and 1-line AI summaries!
+    # Fallback: send clean HTML digest without attachments
     try:
         fallback_msg = MIMEMultipart()
         fallback_msg["From"] = f"{from_name} <{smtp_user}>"
@@ -239,13 +320,13 @@ def send_screening_digest_email(
         fallback_msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - AI Summary"
 
         fallback_notice = (
-            "Resume attachments were omitted due to attachment size or mail server delivery constraints. "
+            "Resume attachments were omitted due to mail delivery constraints. "
             f"All {len(candidates)} candidate evaluations, scores, and 1-line AI summaries are detailed below."
         )
         fallback_html = build_email_html(job_title, candidates, notice=fallback_notice)
         fallback_msg.attach(MIMEText(fallback_html, "html"))
 
-        server = _create_smtp_session(smtp_host, smtp_port, timeout=30)
+        server = _create_smtp_session(smtp_host, smtp_port, timeout=20)
         try:
             server.login(smtp_user, smtp_password)
             server.send_message(fallback_msg)
@@ -256,7 +337,39 @@ def send_screening_digest_email(
                 server.quit()
             except Exception:
                 pass
-
     except Exception as fallback_err:
         logger.error(f"Fatal: Failed to send fallback digest email to {recipient_email}: {fallback_err}")
         return False
+
+def send_screening_digest_email(
+    recipient_email: str,
+    job_title: str,
+    candidates: List[Dict[str, Any]],
+    attachments: Optional[List[Tuple[str, bytes]]] = None
+) -> bool:
+    """
+    Unified email dispatcher:
+    1. If RESEND_API_KEY is configured: Uses Resend HTTP API (Port 443),
+       which works reliably on Render Free Tier where outbound SMTP ports are blocked.
+    2. Otherwise: Uses SMTP (ports 587/465), suitable for localhost or non-blocked hosts.
+    """
+    if not recipient_email or not candidates:
+        logger.info("No recipient email or candidates provided for email digest.")
+        return False
+
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if resend_api_key:
+        return _send_via_resend(
+            api_key=resend_api_key,
+            recipient_email=recipient_email,
+            job_title=job_title,
+            candidates=candidates,
+            attachments=attachments
+        )
+
+    return _send_via_smtp(
+        recipient_email=recipient_email,
+        job_title=job_title,
+        candidates=candidates,
+        attachments=attachments
+    )

@@ -135,13 +135,19 @@ def get_email_status():
     elif smtp_user:
         masked = f"{smtp_user[:3]}***"
 
+    resend_key = os.getenv("RESEND_API_KEY")
+    masked_resend = f"{resend_key[:6]}..." if resend_key else None
+
     return {
+        "active_provider": "resend_api" if resend_key else ("smtp" if (smtp_user and smtp_password) else "none"),
+        "resend_configured": bool(resend_key),
+        "resend_key_preview": masked_resend,
         "smtp_configured": bool(smtp_user and smtp_password),
         "smtp_host": smtp_host,
         "smtp_port": smtp_port,
         "smtp_user": masked,
-        "has_user": bool(smtp_user),
-        "has_password": bool(smtp_password)
+        "render_smtp_blocked": True,
+        "note": "Render free tier blocks outbound SMTP ports 25, 465, 587. Configure RESEND_API_KEY in Render Environment for 100% reliable HTTPS email delivery."
     }
 
 @router.get("/smtp-check")
