@@ -93,18 +93,39 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
     """
     return html
 
-def _create_smtp_session(host: str, port: int, timeout: int = 75):
-    """Establishes an SMTP connection supporting STARTTLS or SSL."""
-    if port == 465:
-        server = smtplib.SMTP_SSL(host, port, timeout=timeout)
-        server.ehlo()
-    else:
-        server = smtplib.SMTP(host, port, timeout=timeout)
-        server.ehlo()
-        if port in (587, 25):
-            server.starttls()
-            server.ehlo()
-    return server
+def _create_smtp_session(host: str, preferred_port: int, timeout: int = 45):
+    """
+    Establishes an SMTP connection with intelligent fallback between
+    SSL (port 465) and STARTTLS (port 587) to prevent timeouts on cloud hosts.
+    """
+    ports_to_try = [preferred_port]
+    if preferred_port == 587 and 465 not in ports_to_try:
+        ports_to_try.append(465)
+    elif preferred_port == 465 and 587 not in ports_to_try:
+        ports_to_try.append(587)
+    elif 465 not in ports_to_try:
+        ports_to_try.extend([465, 587])
+
+    last_err = None
+    for port in ports_to_try:
+        try:
+            logger.info(f"Attempting SMTP connection to {host}:{port}...")
+            if port == 465:
+                server = smtplib.SMTP_SSL(host, port, timeout=timeout)
+                server.ehlo()
+                return server
+            else:
+                server = smtplib.SMTP(host, port, timeout=min(timeout, 12))
+                server.ehlo()
+                if port in (587, 25):
+                    server.starttls()
+                    server.ehlo()
+                return server
+        except Exception as conn_err:
+            logger.warning(f"Connection to {host}:{port} failed ({conn_err}). Trying fallback port...")
+            last_err = conn_err
+
+    raise ConnectionError(f"Could not connect to SMTP server {host} on any port ({ports_to_try}): {last_err}")
 
 def send_screening_digest_email(
     recipient_email: str,

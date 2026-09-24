@@ -144,8 +144,25 @@ def get_email_status():
         "has_password": bool(smtp_password)
     }
 
+@router.get("/smtp-check")
+def smtp_check():
+    """
+    Diagnostic endpoint to test TCP connectivity to Gmail SMTP from this server.
+    """
+    import socket
+    results = {}
+    for p in [465, 587]:
+        t0 = time.time()
+        try:
+            sock = socket.create_connection(("smtp.gmail.com", p), timeout=5)
+            sock.close()
+            results[f"port_{p}"] = f"OPEN ({round((time.time() - t0)*1000)}ms)"
+        except Exception as e:
+            results[f"port_{p}"] = f"FAILED: {e}"
+    return results
+
 @router.post("/test-email")
-def send_test_email(
+async def send_test_email(
     to_email: Optional[str] = None,
     current_user: User = Depends(get_current_user)
 ):
@@ -169,7 +186,8 @@ def send_test_email(
         }
     ]
 
-    success = send_screening_digest_email(
+    success = await run_in_threadpool(
+        send_screening_digest_email,
         recipient_email=target_email,
         job_title="Diagnostic Test Run",
         candidates=sample_candidates,
