@@ -101,7 +101,7 @@ def generate_candidate_profile_pdf(candidate: Dict[str, Any], job_title: str) ->
     story = []
 
     # 1. Header Banner
-    story.append(Paragraph("AI RESUME SCREENER — CANDIDATE EVALUATION", title_style))
+    story.append(Paragraph("AI RESUME SCREENER - CANDIDATE EVALUATION", title_style))
     story.append(Paragraph(f"Target Role: <b>{job_title}</b> | Generated on: {datetime.utcnow().strftime('%B %d, %Y')}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor("#2ad38a"), spaceAfter=14))
 

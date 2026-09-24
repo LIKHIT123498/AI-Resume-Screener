@@ -2,6 +2,7 @@ import os
 import smtplib
 import logging
 import base64
+import json
 import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -19,6 +20,7 @@ def build_email_html(
     """
     Builds a clean, responsive HTML email containing candidate fit scores,
     1-line AI summaries, and indicating attached resume files (PDF/DOC).
+    Uses clean typography and CSS badges without emojis to avoid encoding artifacts.
     """
     candidate_rows = ""
     for candidate in candidates:
@@ -41,20 +43,17 @@ def build_email_html(
             badge_border = "#fca5a5"
 
         status_badge = (
-            '<span style="font-size: 11px; color: #166534; font-weight: 600;">📎 Resume file attached</span>'
+            '<span style="display: inline-block; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px;">Resume file attached</span>'
             if has_attachments else
-            '<span style="font-size: 11px; color: #64748b; font-weight: 500;">AI Profile Evaluated</span>'
+            '<span style="display: inline-block; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px;">AI Profile Evaluated</span>'
         )
 
         candidate_rows += f"""
         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 18px;">📄</span>
-                    <div>
-                        <h3 style="margin: 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
-                        {status_badge}
-                    </div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                    <h3 style="margin: 0 0 5px 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
+                    {status_badge}
                 </div>
                 <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 9999px;">
                     {fit_score:.1f}% Fit
@@ -150,12 +149,12 @@ def _send_via_resend(
     notice: Optional[str] = None
     if skipped_count > 0:
         notice = (
-            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
+            f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
             f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
-        notice = f"📎 <strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
+        notice = f"<strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
 
     has_attachments = bool(attached_files)
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
@@ -289,12 +288,12 @@ def _send_via_gmail_relay(
     notice: Optional[str] = None
     if skipped_count > 0:
         notice = (
-            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
+            f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
             f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
-        notice = f"📎 <strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
+        notice = f"<strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
 
     has_attachments = bool(attached_files)
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
@@ -317,10 +316,11 @@ def _send_via_gmail_relay(
     try:
         logger.info(f"Delivering email via Gmail HTTPS Relay to {recipient_email} ({len(attached_files)} attachments)...")
         session = requests.Session()
+        data_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         resp = session.post(
             relay_url,
-            json=payload,
-            headers={"Content-Type": "application/json"},
+            data=data_bytes,
+            headers={"Content-Type": "application/json; charset=utf-8"},
             allow_redirects=True,
             timeout=45
         )
@@ -424,12 +424,12 @@ def _send_via_smtp(
     notice: Optional[str] = None
     if skipped_count > 0:
         notice = (
-            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
+            f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to keep the message within email provider delivery limits). "
             f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
-        notice = f"📎 <strong>All {len(attached_files)} resume file(s) are attached to this email.</strong>"
+        notice = f"<strong>All {len(attached_files)} resume file(s) are attached to this email.</strong>"
 
     subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
     msg = MIMEMultipart()
@@ -438,7 +438,7 @@ def _send_via_smtp(
     msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}"
 
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
-    msg.attach(MIMEText(html_content, "html"))
+    msg.attach(MIMEText(html_content, "html", "utf-8"))
 
     for filename, file_bytes in attached_files:
         try:
