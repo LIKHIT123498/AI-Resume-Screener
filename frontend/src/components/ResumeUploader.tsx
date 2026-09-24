@@ -88,7 +88,7 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             await apiClient.post(`/screening/${jobId}/upload-resumes`, formData, {
-              headers: { 'Content-Type': 'multipart/form-data' },
+              headers: { 'Content-Type': undefined },
             });
             batchSucceeded = true;
             break;
@@ -107,7 +107,18 @@ export const ResumeUploader: React.FC<Props> = ({ jobId, onUploadSuccess }) => {
           setProgress({ current: processedCount, total: validFiles.length });
           onUploadSuccess(); // Refresh candidate table progressively after every batch!
         } else {
-          // If a batch fails after retry, record failure and break to report accurately
+          // If a batch fails after retry, finalize whatever was processed so far and break
+          if (processedCount > 0) {
+            try {
+              const finalizeData = new FormData();
+              finalizeData.append('session_id', sessionId);
+              await apiClient.post(`/screening/${jobId}/finalize-upload-session`, finalizeData, {
+                headers: { 'Content-Type': undefined },
+              });
+            } catch (finErr) {
+              console.warn('Session finalization notice:', finErr);
+            }
+          }
           break;
         }
 

@@ -4,14 +4,14 @@ import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-def build_email_html(job_title: str, candidates: List[Dict[str, Any]]) -> str:
+def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: Optional[str] = None) -> str:
     """
-    Builds a clean, responsive HTML email containing candidate fit scores
-    and 1-line AI summaries.
+    Builds a clean, responsive HTML email containing candidate fit scores,
+    1-line AI summaries, and optional status notices.
     """
     candidate_rows = ""
     for candidate in candidates:
@@ -50,6 +50,14 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]]) -> str:
         </div>
         """
 
+    notice_html = ""
+    if notice:
+        notice_html = f"""
+        <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #92400e;">
+            <strong>Notice:</strong> {notice}
+        </div>
+        """
+
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -68,8 +76,9 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]]) -> str:
 
             <!-- Body -->
             <div style="padding: 24px; background: #f8fafc;">
+                {notice_html}
                 <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569;">
-                    The following <strong>{len(candidates)} resume(s)</strong> have been screened by AI. The original resume files are attached to this email.
+                    The following <strong>{len(candidates)} resume(s)</strong> have been screened by AI:
                 </p>
                 {candidate_rows}
             </div>
@@ -84,15 +93,30 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]]) -> str:
     """
     return html
 
+def _create_smtp_session(host: str, port: int, timeout: int = 75):
+    """Establishes an SMTP connection supporting STARTTLS or SSL."""
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=timeout)
+        server.ehlo()
+    else:
+        server = smtplib.SMTP(host, port, timeout=timeout)
+        server.ehlo()
+        if port in (587, 25):
+            server.starttls()
+            server.ehlo()
+    return server
+
 def send_screening_digest_email(
     recipient_email: str,
     job_title: str,
     candidates: List[Dict[str, Any]],
-    attachments: List[Tuple[str, bytes]]
+    attachments: Optional[List[Tuple[str, bytes]]] = None
 ) -> bool:
     """
     Sends an email with candidate fit scores, 1-line AI summaries,
     and attached resume files to the registered user's email.
+    Includes a resilient fallback to send without attachments if file sizes
+    or slow SMTP network causes an issue.
     """
     if not recipient_email or not candidates:
         logger.info("No recipient email or candidates provided for email digest.")
@@ -109,65 +133,109 @@ def send_screening_digest_email(
     smtp_password = os.getenv("SMTP_PASSWORD")
     from_name = os.getenv("SMTP_FROM_NAME", "AI Resume Screener")
 
-    # If SMTP is not yet configured, log a helpful guide and return cleanly without crashing
+    # If SMTP is not yet configured, log a helpful guide and return cleanly
     if not smtp_user or not smtp_password:
         logger.warning(
-            f"SMTP_USER or SMTP_PASSWORD is not configured in .env. "
+            f"SMTP_USER or SMTP_PASSWORD is not configured in environment. "
             f"Skipping email to {recipient_email}. "
-            f"To enable email delivery, set SMTP_USER and SMTP_PASSWORD in your backend .env file."
+            f"To enable email delivery on Render/production, set SMTP_USER and SMTP_PASSWORD in Dashboard -> Environment."
         )
         return False
 
+    attachments = attachments or []
+    total_attach_bytes = 0
+    MAX_ATTACH_BYTES = 10 * 1024 * 1024  # 10 MB raw limit (safe for Gmail 25MB total mime ceiling)
+
+    attached_files: List[Tuple[str, bytes]] = []
+    skipped_count = 0
+
+    for filename, file_bytes in attachments:
+        if not file_bytes:
+            continue
+        if total_attach_bytes + len(file_bytes) > MAX_ATTACH_BYTES:
+            skipped_count += 1
+            continue
+        attached_files.append((filename, file_bytes))
+        total_attach_bytes += len(file_bytes)
+
+    notice: Optional[str] = None
+    if skipped_count > 0:
+        notice = (
+            f"{len(attached_files)} of {len(attachments)} resume files attached. "
+            f"{skipped_count} attachment(s) were omitted to keep the message within email provider delivery limits. "
+            f"All {len(candidates)} candidate summaries and fit scores are included below."
+        )
+    elif attached_files:
+        notice = f"The {len(attached_files)} original resume file(s) are attached to this email."
+
+    # Build primary email message with attachments
+    msg = MIMEMultipart()
+    msg["From"] = f"{from_name} <{smtp_user}>"
+    msg["To"] = recipient_email
+    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - AI Summary"
+
+    html_content = build_email_html(job_title, candidates, notice=notice)
+    msg.attach(MIMEText(html_content, "html"))
+
+    for filename, file_bytes in attached_files:
+        try:
+            part = MIMEApplication(file_bytes, Name=filename)
+            part["Content-Disposition"] = f'attachment; filename="{filename}"'
+            msg.attach(part)
+        except Exception as attach_err:
+            logger.error(f"Failed to attach resume {filename}: {attach_err}")
+
+    # Step 1: Attempt sending with attachments (75s timeout)
     try:
-        msg = MIMEMultipart()
-        msg["From"] = f"{from_name} <{smtp_user}>"
-        msg["To"] = recipient_email
-        msg["Subject"] = f"[{job_title}] {len(candidates)} New Candidate(s) Screened - AI Summary"
-
-        # Attach HTML body
-        html_content = build_email_html(job_title, candidates)
-        msg.attach(MIMEText(html_content, "html"))
-
-        # Attach resumes (stay under email provider 18MB total mime limit)
-        total_attach_bytes = 0
-        MAX_ATTACH_BYTES = 18 * 1024 * 1024  # 18 MB limit
-
-        for filename, file_bytes in attachments:
-            if not file_bytes:
-                continue
-            if total_attach_bytes + len(file_bytes) > MAX_ATTACH_BYTES:
-                logger.warning(
-                    f"Attachment {filename} skipped to stay within email provider size limit ({MAX_ATTACH_BYTES} bytes)."
-                )
-                continue
-            try:
-                part = MIMEApplication(file_bytes, Name=filename)
-                part["Content-Disposition"] = f'attachment; filename="{filename}"'
-                msg.attach(part)
-                total_attach_bytes += len(file_bytes)
-            except Exception as attach_err:
-                logger.error(f"Failed to attach resume {filename}: {attach_err}")
-
-        # Send via SMTP (support both STARTTLS port 587 and SSL port 465)
-        if smtp_port == 465:
-            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20)
-            server.ehlo()
-        else:
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=20)
-            server.ehlo()
-            if smtp_port in (587, 25):
-                server.starttls()
-                server.ehlo()
-
+        logger.info(
+            f"Connecting to SMTP {smtp_host}:{smtp_port} to deliver {len(candidates)} candidates "
+            f"({len(attached_files)} attachments, {total_attach_bytes / 1024:.1f} KB) to {recipient_email}..."
+        )
+        server = _create_smtp_session(smtp_host, smtp_port, timeout=75)
         try:
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
+            logger.info(f"Successfully sent screening digest email for '{job_title}' to {recipient_email}")
+            return True
         finally:
-            server.quit()
+            try:
+                server.quit()
+            except Exception:
+                pass
 
-        logger.info(f"Successfully sent screening digest email for '{job_title}' to {recipient_email}")
-        return True
+    except Exception as primary_err:
+        logger.warning(
+            f"Failed to send email with attachments to {recipient_email}: {primary_err}. "
+            f"Initiating resilient fallback: delivering HTML summaries without attachments..."
+        )
 
-    except Exception as e:
-        logger.error(f"Failed to send screening digest email to {recipient_email}: {e}")
+    # Step 2: Resilient Fallback - Send without attachments
+    # This guarantees the user ALWAYS gets the candidate evaluations, scores, and 1-line AI summaries!
+    try:
+        fallback_msg = MIMEMultipart()
+        fallback_msg["From"] = f"{from_name} <{smtp_user}>"
+        fallback_msg["To"] = recipient_email
+        fallback_msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - AI Summary"
+
+        fallback_notice = (
+            "Resume attachments were omitted due to attachment size or mail server delivery constraints. "
+            f"All {len(candidates)} candidate evaluations, scores, and 1-line AI summaries are detailed below."
+        )
+        fallback_html = build_email_html(job_title, candidates, notice=fallback_notice)
+        fallback_msg.attach(MIMEText(fallback_html, "html"))
+
+        server = _create_smtp_session(smtp_host, smtp_port, timeout=30)
+        try:
+            server.login(smtp_user, smtp_password)
+            server.send_message(fallback_msg)
+            logger.info(f"Successfully delivered fallback digest email (no attachments) to {recipient_email}")
+            return True
+        finally:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+    except Exception as fallback_err:
+        logger.error(f"Fatal: Failed to send fallback digest email to {recipient_email}: {fallback_err}")
         return False

@@ -1,5 +1,6 @@
 import asyncio
 import time
+import os
 import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
@@ -116,6 +117,105 @@ async def process_single_file(
         logger.error(f"Error processing candidate file {file.filename}: {err}")
         return None
 
+@router.get("/email-status")
+def get_email_status():
+    """
+    Public diagnostic endpoint to check if SMTP environment variables
+    are configured on the server. Masks credentials for security.
+    """
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = os.getenv("SMTP_PORT", "587")
+
+    masked = None
+    if smtp_user and "@" in smtp_user:
+        u, d = smtp_user.split("@", 1)
+        masked = f"{u[:3]}***@{d}"
+    elif smtp_user:
+        masked = f"{smtp_user[:3]}***"
+
+    return {
+        "smtp_configured": bool(smtp_user and smtp_password),
+        "smtp_host": smtp_host,
+        "smtp_port": smtp_port,
+        "smtp_user": masked,
+        "has_user": bool(smtp_user),
+        "has_password": bool(smtp_password)
+    }
+
+@router.post("/test-email")
+def send_test_email(
+    to_email: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows sending a diagnostic test digest email directly to the logged-in user.
+    """
+    target_email = to_email or current_user.email
+    if not target_email:
+        raise HTTPException(status_code=400, detail="No recipient email address.")
+
+    sample_candidates = [
+        {
+            "name": "Alex Morgan (Diagnostic Test)",
+            "overall_fit_score": 94.0,
+            "one_line_summary": "Expert Senior Full-Stack Engineer with 6+ years React, Python, and cloud infrastructure experience."
+        },
+        {
+            "name": "Taylor Swift (Diagnostic Test)",
+            "overall_fit_score": 81.5,
+            "one_line_summary": "Proficient Software Engineer skilled in TypeScript, Node.js, and automated testing."
+        }
+    ]
+
+    success = send_screening_digest_email(
+        recipient_email=target_email,
+        job_title="Diagnostic Test Run",
+        candidates=sample_candidates,
+        attachments=[]
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send test email. Please check if SMTP_USER and SMTP_PASSWORD are configured in the environment."
+        )
+    return {"success": True, "message": f"Test email sent successfully to {target_email}"}
+
+@router.post("/{job_id}/finalize-upload-session")
+def finalize_upload_session(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    session_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Forces immediate finalization and email dispatch of an upload session,
+    ensuring that even if an upload stops midway, screened candidates are emailed.
+    """
+    job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    current_session_key = f"{current_user.id}_{session_id}"
+    if current_session_key in _upload_sessions:
+        session_data = _upload_sessions.pop(current_session_key)
+        candidates = session_data["candidates"]
+        attachments = session_data["attachments"]
+        if candidates and current_user.email:
+            logger.info(f"Finalizing session {session_id} - sending {len(candidates)} candidates to {current_user.email}")
+            background_tasks.add_task(
+                send_screening_digest_email,
+                recipient_email=current_user.email,
+                job_title=job.title,
+                candidates=candidates,
+                attachments=attachments
+            )
+        return {"finalized": True, "candidates_count": len(candidates)}
+    return {"finalized": False, "message": "Session not found or already dispatched."}
+
 @router.post("/{job_id}/upload-resumes")
 async def upload_and_screen_resumes(
     job_id: int,
@@ -204,6 +304,10 @@ async def upload_and_screen_resumes(
             all_attachments = attachments
 
         if all_candidates and current_user.email:
+            logger.info(
+                f"Queueing digest email to {current_user.email} for '{job.title}' "
+                f"({len(all_candidates)} candidates, {len(all_attachments)} attachments)..."
+            )
             background_tasks.add_task(
                 send_screening_digest_email,
                 recipient_email=current_user.email,
@@ -211,5 +315,7 @@ async def upload_and_screen_resumes(
                 candidates=all_candidates,
                 attachments=all_attachments
             )
+        elif not current_user.email:
+            logger.warning(f"User {current_user.id} has no email address. Skipping email digest.")
 
     return {"processed_count": len(results), "candidates": results}
