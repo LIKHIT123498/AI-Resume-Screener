@@ -5,18 +5,22 @@ import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict, Any
+from pathlib import Path
 from app.core.database import get_db
 from app.models.job import Job
 from app.models.candidate import Candidate
 from app.services.parser import extract_text_from_file
 from app.services.ai_engine import screen_resume, calculate_overall_fit
 from app.services.email_service import send_screening_digest_email
+from app.services.pdf_generator import generate_candidate_profile_pdf
 from app.models.user import User
 from app.api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+UPLOAD_DIR = Path("uploads")
 
 # In-memory session store to combine multi-batch uploads into 1 single email digest
 _upload_sessions: dict[str, dict] = {}
@@ -256,6 +260,8 @@ def resend_job_digest_email(
     """
     Sends or re-sends the candidate screening digest email for any job,
     fetching all candidates currently saved in the database for that job.
+    Attaches the original uploaded resume files if present on disk, or generates
+    clean candidate evaluation PDF profiles so attachments are always included!
     """
     job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
     if not job:
@@ -278,18 +284,55 @@ def resend_job_digest_email(
     if not target:
         raise HTTPException(status_code=400, detail="No recipient email address.")
 
-    logger.info(f"Queuing resend of screening digest for job {job_id} ({len(candidates)} candidates) to {target}...")
+    # 1. First, check if original uploaded resume files exist on disk for this job
+    attachments = []
+    job_upload_dir = UPLOAD_DIR / str(job_id)
+    if job_upload_dir.exists():
+        for f in job_upload_dir.iterdir():
+            if f.is_file() and not f.name.startswith("."):
+                try:
+                    attachments.append((f.name, f.read_bytes()))
+                except Exception as read_err:
+                    logger.warning(f"Could not read cached file {f.name}: {read_err}")
+
+    # 2. If no files on disk (e.g. historical candidates or container restarted),
+    # generate candidate evaluation PDF profiles so actual PDFs are always attached!
+    if not attachments:
+        logger.info(f"No cached resume files on disk for job {job_id}. Generating PDF dossiers for {len(candidates)} candidates...")
+        for c in candidates:
+            c_dict = {
+                "name": c.name,
+                "overall_fit_score": c.overall_fit_score,
+                "skills_score": c.skills_score,
+                "seniority_score": c.seniority_score,
+                "domain_score": c.domain_score,
+                "one_line_summary": c.one_line_summary,
+                "extracted_skills": c.extracted_skills,
+                "red_flags": c.red_flags,
+                "company_changes": c.company_changes,
+                "avg_duration_months": c.avg_duration_months,
+                "email": c.email,
+                "phone": c.phone
+            }
+            try:
+                pdf_bytes = generate_candidate_profile_pdf(c_dict, job.title)
+                safe_name = (c.name or "Candidate").strip().replace(" ", "_")
+                attachments.append((f"{safe_name}_Evaluation_Profile.pdf", pdf_bytes))
+            except Exception as pdf_err:
+                logger.error(f"Error generating PDF for candidate {c.name}: {pdf_err}")
+
+    logger.info(f"Queuing resend of screening digest for job {job_id} ({len(candidates)} candidates, {len(attachments)} attachments) to {target}...")
     background_tasks.add_task(
         send_screening_digest_email,
         recipient_email=target,
         job_title=job.title,
         candidates=candidate_summaries,
-        attachments=[]
+        attachments=attachments
     )
 
     return {
         "success": True,
-        "message": f"Screening digest email queued for {len(candidates)} candidate(s) to {target}."
+        "message": f"Screening digest email queued for {len(candidates)} candidate(s) with {len(attachments)} attachment(s) to {target}."
     }
 
 @router.post("/{job_id}/upload-resumes")
@@ -328,6 +371,12 @@ async def upload_and_screen_resumes(
 
     results = []
     attachments = []
+    job_upload_dir = UPLOAD_DIR / str(job_id)
+    try:
+        job_upload_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as dir_err:
+        logger.warning(f"Could not create upload directory {job_upload_dir}: {dir_err}")
+
     for item in candidate_data_list:
         if not item:
             continue
@@ -338,7 +387,15 @@ async def upload_and_screen_resumes(
             db.refresh(candidate)
             results.append(candidate)
             if item.get("filename") and item.get("file_bytes"):
-                attachments.append((item["filename"], item["file_bytes"]))
+                fname = item["filename"]
+                fbytes = item["file_bytes"]
+                attachments.append((fname, fbytes))
+                try:
+                    safe_fname = Path(fname).name
+                    file_path = job_upload_dir / safe_fname
+                    file_path.write_bytes(fbytes)
+                except Exception as save_err:
+                    logger.warning(f"Could not persist resume file {fname} to disk: {save_err}")
         except Exception as db_err:
             db.rollback()
             logger.error(f"Database commit error for candidate: {db_err}")

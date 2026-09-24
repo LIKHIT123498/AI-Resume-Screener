@@ -10,10 +10,15 @@ from typing import List, Tuple, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: Optional[str] = None) -> str:
+def build_email_html(
+    job_title: str,
+    candidates: List[Dict[str, Any]],
+    notice: Optional[str] = None,
+    has_attachments: bool = True
+) -> str:
     """
     Builds a clean, responsive HTML email containing candidate fit scores,
-    1-line AI summaries, and indicating attached original resume files (PDF/DOC).
+    1-line AI summaries, and indicating attached resume files (PDF/DOC).
     """
     candidate_rows = ""
     for candidate in candidates:
@@ -35,6 +40,12 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
             badge_color = "#b91c1c"
             badge_border = "#fca5a5"
 
+        status_badge = (
+            '<span style="font-size: 11px; color: #166534; font-weight: 600;">📎 Resume file attached</span>'
+            if has_attachments else
+            '<span style="font-size: 11px; color: #64748b; font-weight: 500;">AI Profile Evaluated</span>'
+        )
+
         candidate_rows += f"""
         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -42,7 +53,7 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
                     <span style="font-size: 18px;">📄</span>
                     <div>
                         <h3 style="margin: 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
-                        <span style="font-size: 11px; color: #64748b; font-weight: 500;">Original resume file attached</span>
+                        {status_badge}
                     </div>
                 </div>
                 <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 9999px;">
@@ -66,6 +77,12 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
         </div>
         """
 
+    intro_text = (
+        f"The original resume files (PDF/DOC) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email along with their 1-line AI evaluation summaries and fit scores:"
+        if has_attachments else
+        f"Candidate screening summaries and fit scores for <strong>{len(candidates)} candidate(s)</strong> are listed below:"
+    )
+
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -86,7 +103,7 @@ def build_email_html(job_title: str, candidates: List[Dict[str, Any]], notice: O
             <div style="padding: 24px; background: #f8fafc;">
                 {notice_html}
                 <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569;">
-                    The original resume files (PDF/DOC) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email along with their 1-line AI evaluation summaries and fit scores:
+                    {intro_text}
                 </p>
                 {candidate_rows}
             </div>
@@ -111,13 +128,13 @@ def _send_via_resend(
     """
     Sends email via the Resend HTTP API (Port 443).
     Bypasses outbound SMTP port blocks on Render, AWS, and other cloud providers.
-    Attaches the original candidate resume files (PDF/DOC/DOCX) and includes 1-line AI summaries.
+    Attaches the candidate resume files (PDF/DOC/DOCX) and includes 1-line AI summaries.
     """
     attachments = attachments or []
     from_sender = os.getenv("RESEND_FROM_EMAIL", "AI Resume Screener <onboarding@resend.dev>")
     
     total_attach_bytes = 0
-    MAX_ATTACH_BYTES = 25 * 1024 * 1024  # 25 MB limit for Resend
+    MAX_ATTACH_BYTES = 18 * 1024 * 1024  # 18 MB raw limit (stays under 25MB after base64 encoding)
     attached_files = []
     skipped_count = 0
 
@@ -133,21 +150,23 @@ def _send_via_resend(
     notice: Optional[str] = None
     if skipped_count > 0:
         notice = (
-            f"{len(attached_files)} of {len(attachments)} resume files attached. "
+            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
             f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
-        notice = f"All {len(attached_files)} original resume file(s) are attached to this email."
+        notice = f"📎 <strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
 
-    html_content = build_email_html(job_title, candidates, notice=notice)
+    has_attachments = bool(attached_files)
+    html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
 
     target_recipient = os.getenv("RESEND_RECIPIENT_OVERRIDE") or recipient_email
 
+    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
     payload = {
         "from": from_sender,
         "to": [target_recipient],
-        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - Resumes & AI Summaries Attached",
+        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}",
         "html": html_content,
     }
 
@@ -169,10 +188,10 @@ def _send_via_resend(
                 "Content-Type": "application/json"
             },
             json=payload,
-            timeout=30
+            timeout=35
         )
         if resp.status_code in (200, 201):
-            logger.info(f"Successfully delivered screening digest email via Resend to {target_recipient}")
+            logger.info(f"Successfully delivered screening digest email via Resend to {target_recipient} with {len(attached_files)} attachments")
             return True
 
         logger.warning(f"Resend API error {resp.status_code}: {resp.text}")
@@ -195,8 +214,9 @@ def _send_via_resend(
                     f"To deliver directly to {target_recipient}, sign up for Resend using {target_recipient} "
                     f"or verify your custom domain."
                 )
+                combined_notice = f"{sandbox_notice}<br/><br/>{notice}" if notice else sandbox_notice
                 payload["to"] = [sandbox_owner]
-                payload["html"] = build_email_html(job_title, candidates, notice=sandbox_notice)
+                payload["html"] = build_email_html(job_title, candidates, notice=combined_notice, has_attachments=has_attachments)
                 redirect_resp = requests.post(
                     "https://api.resend.com/emails",
                     headers={
@@ -204,10 +224,10 @@ def _send_via_resend(
                         "Content-Type": "application/json"
                     },
                     json=payload,
-                    timeout=30
+                    timeout=35
                 )
                 if redirect_resp.status_code in (200, 201):
-                    logger.info(f"Successfully redirected email to Resend account owner {sandbox_owner}")
+                    logger.info(f"Successfully redirected email to Resend account owner {sandbox_owner} with {len(attached_files)} attachments")
                     return True
                 else:
                     logger.warning(f"Redirect attempt error: {redirect_resp.status_code}: {redirect_resp.text}")
@@ -216,6 +236,12 @@ def _send_via_resend(
         if payload.get("attachments"):
             logger.info("Retrying Resend send without attachments...")
             payload.pop("attachments")
+            payload["html"] = build_email_html(
+                job_title,
+                candidates,
+                notice="Resume attachments exceeded maximum email size limits and were omitted. Candidate summaries are shown below.",
+                has_attachments=False
+            )
             retry_resp = requests.post(
                 "https://api.resend.com/emails",
                 headers={
@@ -223,7 +249,7 @@ def _send_via_resend(
                     "Content-Type": "application/json"
                 },
                 json=payload,
-                timeout=20
+                timeout=25
             )
             if retry_resp.status_code in (200, 201):
                 logger.info(f"Successfully delivered fallback digest email via Resend to {payload['to']}")
@@ -312,22 +338,24 @@ def _send_via_smtp(
         attached_files.append((filename, file_bytes))
         total_attach_bytes += len(file_bytes)
 
+    has_attachments = bool(attached_files)
     notice: Optional[str] = None
     if skipped_count > 0:
         notice = (
-            f"{len(attached_files)} of {len(attachments)} resume files attached. "
+            f"📎 <strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to keep the message within email provider delivery limits). "
             f"All {len(candidates)} candidates and 1-line summaries are listed below."
         )
     elif attached_files:
-        notice = f"All {len(attached_files)} original resume file(s) are attached to this email."
+        notice = f"📎 <strong>All {len(attached_files)} resume file(s) are attached to this email.</strong>"
 
+    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{smtp_user}>"
     msg["To"] = recipient_email
-    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - Resumes & AI Summaries Attached"
+    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}"
 
-    html_content = build_email_html(job_title, candidates, notice=notice)
+    html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
     msg.attach(MIMEText(html_content, "html"))
 
     for filename, file_bytes in attached_files:
