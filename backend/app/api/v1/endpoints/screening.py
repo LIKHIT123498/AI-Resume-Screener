@@ -317,6 +317,16 @@ def resend_job_digest_email(
         except Exception as db_err:
             logger.warning(f"Error querying resume files from DB: {db_err}")
 
+    if not attachments:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No original resume files are stored on the server for these candidates. "
+                "These candidates were uploaded before database resume archiving was enabled. "
+                "Please upload the candidate resumes on the dashboard to store and email their original PDF/DOCX files."
+            )
+        )
+
     logger.info(f"Queuing resend of screening digest for job {job_id} ({len(candidates)} candidates, {len(attachments)} original resume attachments) to {target}...")
     background_tasks.add_task(
         send_screening_digest_email,
@@ -326,14 +336,37 @@ def resend_job_digest_email(
         attachments=attachments
     )
 
-    if attachments:
-        msg = f"Screening digest email queued for {len(candidates)} candidate(s) with {len(attachments)} original resume attachment(s) to {target}."
-    else:
-        msg = f"Screening digest email queued for {len(candidates)} candidate(s) to {target}. (Note: Original resume files were not archived for this previous upload session. Newly uploaded candidates will have their original PDF/DOCX resumes attached)."
-
     return {
         "success": True,
-        "message": msg
+        "message": f"Screening digest email queued for {len(candidates)} candidate(s) with {len(attachments)} original resume attachment(s) to {target}."
+    }
+
+@router.get("/{job_id}/resumes-check")
+def check_job_resumes(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Diagnostic endpoint to verify whether resume files exist in PostgreSQL for a job.
+    """
+    candidates = db.query(Candidate).filter(Candidate.job_id == job_id).all()
+    try:
+        db_resumes = db.query(ResumeFile).filter(ResumeFile.job_id == job_id).all()
+        resume_count = len(db_resumes)
+        filenames = [rf.filename for rf in db_resumes]
+        table_status = "OK"
+    except Exception as e:
+        resume_count = 0
+        filenames = []
+        table_status = f"Error: {e}"
+
+    return {
+        "job_id": job_id,
+        "table_status": table_status,
+        "candidate_count": len(candidates),
+        "stored_resume_count": resume_count,
+        "filenames": filenames
     }
 
 @router.post("/{job_id}/upload-resumes")

@@ -49,21 +49,15 @@ def build_email_html(
         )
 
         candidate_rows += f"""
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <h3 style="margin: 0 0 5px 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
+                    <h3 style="margin: 0 0 4px 0; font-size: 15px; color: #0f172a; font-weight: 700;">{name}</h3>
                     {status_badge}
                 </div>
-                <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 9999px;">
+                <span style="background: {badge_bg}; color: {badge_color}; border: 1px solid {badge_border}; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 9999px;">
                     {fit_score:.1f}% Fit
                 </span>
-            </div>
-            <div style="background: #f8fafc; border-left: 3px solid #0284c7; padding: 9px 12px; border-radius: 4px; margin-top: 6px;">
-                <span style="font-size: 10px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px;">1-Line AI Summary</span>
-                <p style="margin: 3px 0 0 0; color: #334155; font-size: 13px; line-height: 1.45;">
-                    {summary}
-                </p>
             </div>
         </div>
         """
@@ -77,9 +71,9 @@ def build_email_html(
         """
 
     intro_text = (
-        f"The original resume files (PDF/DOC) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email along with their 1-line AI evaluation summaries and fit scores:"
+        f"The original candidate resume files (PDF/DOCX) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email:"
         if has_attachments else
-        f"Candidate screening summaries and fit scores for <strong>{len(candidates)} candidate(s)</strong> are listed below:"
+        f"Candidate screening overview for <strong>{len(candidates)} candidate(s)</strong>:"
     )
 
     html = f"""
@@ -151,7 +145,7 @@ def _send_via_resend(
         notice = (
             f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
-            f"All {len(candidates)} candidates and 1-line summaries are listed below."
+            f"All {len(candidates)} candidates are listed below."
         )
     elif attached_files:
         notice = f"<strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
@@ -161,7 +155,7 @@ def _send_via_resend(
 
     target_recipient = os.getenv("RESEND_RECIPIENT_OVERRIDE") or recipient_email
 
-    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
     payload = {
         "from": from_sender,
         "to": [target_recipient],
@@ -290,7 +284,7 @@ def _send_via_gmail_relay(
         notice = (
             f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to stay within email delivery limits). "
-            f"All {len(candidates)} candidates and 1-line summaries are listed below."
+            f"All {len(candidates)} candidates are listed below."
         )
     elif attached_files:
         notice = f"<strong>All {len(attached_files)} candidate resume file(s) are attached to this email.</strong>"
@@ -298,7 +292,7 @@ def _send_via_gmail_relay(
     has_attachments = bool(attached_files)
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
 
-    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
     payload = {
         "to": recipient_email,
         "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}",
@@ -426,12 +420,12 @@ def _send_via_smtp(
         notice = (
             f"<strong>{len(attached_files)} of {len(attachments)} resume files attached.</strong> "
             f"({skipped_count} attachment(s) were omitted to keep the message within email provider delivery limits). "
-            f"All {len(candidates)} candidates and 1-line summaries are listed below."
+            f"All {len(candidates)} candidates are listed below."
         )
     elif attached_files:
         notice = f"<strong>All {len(attached_files)} resume file(s) are attached to this email.</strong>"
 
-    subject_suffix = "Resumes & AI Summaries Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{smtp_user}>"
     msg["To"] = recipient_email
