@@ -283,51 +283,85 @@ def resend_job_digest_email(
     if not candidates:
         raise HTTPException(status_code=400, detail="No candidates found for this job yet.")
 
+    # Filter strictly for candidates whose ATS overall fit score is >= 80
+    qualified_candidates = [
+        c for c in candidates 
+        if safe_float(c.overall_fit_score) >= 80.0
+    ]
+    if not qualified_candidates:
+        highest_score = max([safe_float(c.overall_fit_score) for c in candidates], default=0.0)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"No candidates for this job met the ATS threshold of 80% or higher "
+                f"(highest candidate score was {highest_score:.1f}%). "
+                f"Only candidates scoring 80% or above are sent via email."
+            )
+        )
+
+    # Sort descending so highest scores appear first
+    qualified_candidates.sort(key=lambda c: safe_float(c.overall_fit_score), reverse=True)
+
     candidate_summaries = [
         {
             "name": c.name,
             "overall_fit_score": c.overall_fit_score,
             "one_line_summary": c.one_line_summary
         }
-        for c in candidates
+        for c in qualified_candidates
     ]
 
     target = to_email or current_user.email
     if not target:
         raise HTTPException(status_code=400, detail="No recipient email address.")
 
-    # 1. First, check if original uploaded resume files exist on disk for this job
+    qualified_ids = [c.id for c in qualified_candidates]
     attachments = []
-    job_upload_dir = UPLOAD_DIR / str(job_id)
-    if job_upload_dir.exists():
-        for f in job_upload_dir.iterdir():
-            if f.is_file() and not f.name.startswith("."):
-                try:
-                    attachments.append((f.name, f.read_bytes()))
-                except Exception as read_err:
-                    logger.warning(f"Could not read cached file {f.name}: {read_err}")
 
-    # 2. If not on disk (e.g. Render restarted or container wiped), fetch REAL original files from PostgreSQL!
+    # 1. Fetch real original resume files from PostgreSQL for ONLY the qualified candidates
+    try:
+        db_resumes = (
+            db.query(ResumeFile)
+            .filter(ResumeFile.job_id == job_id, ResumeFile.candidate_id.in_(qualified_ids))
+            .all()
+        )
+        # Preserve sorted order of qualified candidates
+        resume_by_cand_id = {}
+        for rf in db_resumes:
+            if rf.filename and rf.file_bytes:
+                resume_by_cand_id.setdefault(rf.candidate_id, []).append((rf.filename, rf.file_bytes))
+        
+        for cid in qualified_ids:
+            if cid in resume_by_cand_id:
+                attachments.extend(resume_by_cand_id[cid])
+    except Exception as db_err:
+        logger.warning(f"Error querying resume files from DB: {db_err}")
+
+    # Fallback to disk if DB had 0 files
     if not attachments:
-        try:
-            db_resumes = db.query(ResumeFile).filter(ResumeFile.job_id == job_id).all()
-            for rf in db_resumes:
-                if rf.filename and rf.file_bytes:
-                    attachments.append((rf.filename, rf.file_bytes))
-        except Exception as db_err:
-            logger.warning(f"Error querying resume files from DB: {db_err}")
+        job_upload_dir = UPLOAD_DIR / str(job_id)
+        if job_upload_dir.exists():
+            for f in job_upload_dir.iterdir():
+                if f.is_file() and not f.name.startswith("."):
+                    try:
+                        attachments.append((f.name, f.read_bytes()))
+                    except Exception as read_err:
+                        logger.warning(f"Could not read cached file {f.name}: {read_err}")
 
     if not attachments:
         raise HTTPException(
             status_code=400,
             detail=(
-                "No original resume files are stored on the server for these candidates. "
-                "These candidates were uploaded before database resume archiving was enabled. "
-                "Please upload the candidate resumes on the dashboard to store and email their original PDF/DOCX files."
+                f"Found {len(qualified_candidates)} qualified candidate(s) (ATS >= 80%), but their original resume files "
+                "are not stored on the server. (They were uploaded before database resume archiving was enabled). "
+                "Please upload candidate resumes on the dashboard to store and email their original PDF/DOCX files."
             )
         )
 
-    logger.info(f"Queuing resend of screening digest for job {job_id} ({len(candidates)} candidates, {len(attachments)} original resume attachments) to {target}...")
+    logger.info(
+        f"Queuing resend of screening digest for job {job_id} "
+        f"({len(qualified_candidates)} qualified candidates >= 80%, {len(attachments)} resume attachments) to {target}..."
+    )
     background_tasks.add_task(
         send_screening_digest_email,
         recipient_email=target,
@@ -338,7 +372,7 @@ def resend_job_digest_email(
 
     return {
         "success": True,
-        "message": f"Screening digest email queued for {len(candidates)} candidate(s) with {len(attachments)} original resume attachment(s) to {target}."
+        "message": f"Screening digest email queued for {len(qualified_candidates)} candidate(s) (ATS >= 80%) with {len(attachments)} original resume attachment(s) to {target}."
     }
 
 @router.get("/{job_id}/resumes-check")
@@ -404,7 +438,8 @@ async def upload_and_screen_resumes(
     candidate_data_list = await asyncio.gather(*tasks, return_exceptions=False)
 
     results = []
-    attachments = []
+    qualified_candidate_summaries = []
+    qualified_attachments = []
     job_upload_dir = UPLOAD_DIR / str(job_id)
     try:
         job_upload_dir.mkdir(parents=True, exist_ok=True)
@@ -420,11 +455,10 @@ async def upload_and_screen_resumes(
             db.commit()
             db.refresh(candidate)
             results.append(candidate)
-            if item.get("filename") and item.get("file_bytes"):
-                fname = item["filename"]
-                fbytes = item["file_bytes"]
-                attachments.append((fname, fbytes))
-                
+            
+            fname = item.get("filename")
+            fbytes = item.get("file_bytes")
+            if fname and fbytes:
                 # 1. Permanently store the REAL uploaded resume file in PostgreSQL
                 try:
                     resume_record = ResumeFile(
@@ -447,6 +481,17 @@ async def upload_and_screen_resumes(
                     file_path.write_bytes(fbytes)
                 except Exception as save_err:
                     logger.warning(f"Could not persist resume file {fname} to disk: {save_err}")
+
+            # Only candidate resumes with ATS score >= 80 should be included in the email
+            fit_val = safe_float(candidate.overall_fit_score)
+            if fit_val >= 80.0:
+                qualified_candidate_summaries.append({
+                    "name": candidate.name,
+                    "overall_fit_score": candidate.overall_fit_score,
+                    "one_line_summary": candidate.one_line_summary
+                })
+                if fname and fbytes:
+                    qualified_attachments.append((fname, fbytes))
         except Exception as db_err:
             db.rollback()
             logger.error(f"Database commit error for candidate: {db_err}")
@@ -454,15 +499,6 @@ async def upload_and_screen_resumes(
     # Accumulate results across batches so 1 single email digest is sent per upload session
     _cleanup_old_sessions()
     
-    candidate_summaries = [
-        {
-            "name": c.name,
-            "overall_fit_score": c.overall_fit_score,
-            "one_line_summary": c.one_line_summary
-        }
-        for c in results
-    ]
-
     current_session_key = f"{current_user.id}_{session_id}" if session_id else None
 
     if current_session_key:
@@ -470,10 +506,14 @@ async def upload_and_screen_resumes(
             _upload_sessions[current_session_key] = {
                 "candidates": [],
                 "attachments": [],
+                "total_screened": 0,
                 "created_at": time.time()
             }
-        _upload_sessions[current_session_key]["candidates"].extend(candidate_summaries)
-        _upload_sessions[current_session_key]["attachments"].extend(attachments)
+        _upload_sessions[current_session_key]["candidates"].extend(qualified_candidate_summaries)
+        _upload_sessions[current_session_key]["attachments"].extend(qualified_attachments)
+        _upload_sessions[current_session_key]["total_screened"] = (
+            _upload_sessions[current_session_key].get("total_screened", 0) + len(results)
+        )
 
     # Determine if we should trigger the combined email now
     last_batch_flag = True if is_last_batch is None else (str(is_last_batch).lower() in ("true", "1", "yes"))
@@ -483,14 +523,19 @@ async def upload_and_screen_resumes(
             session_data = _upload_sessions.pop(current_session_key)
             all_candidates = session_data["candidates"]
             all_attachments = session_data["attachments"]
+            total_screened = session_data.get("total_screened", len(all_candidates))
         else:
-            all_candidates = candidate_summaries
-            all_attachments = attachments
+            all_candidates = qualified_candidate_summaries
+            all_attachments = qualified_attachments
+            total_screened = len(results)
+
+        # Sort qualified candidates descending by fit score
+        all_candidates.sort(key=lambda c: safe_float(c.get("overall_fit_score", 0)), reverse=True)
 
         if all_candidates and current_user.email:
             logger.info(
                 f"Queueing digest email to {current_user.email} for '{job.title}' "
-                f"({len(all_candidates)} candidates, {len(all_attachments)} attachments)..."
+                f"({len(all_candidates)} candidates meeting ATS >= 80%, {len(all_attachments)} attachments)..."
             )
             background_tasks.add_task(
                 send_screening_digest_email,
@@ -498,6 +543,11 @@ async def upload_and_screen_resumes(
                 job_title=job.title,
                 candidates=all_candidates,
                 attachments=all_attachments
+            )
+        elif not all_candidates:
+            logger.info(
+                f"Screened {total_screened} candidate(s) for '{job.title}', but 0 candidate(s) had ATS score >= 80%. "
+                f"Skipping email digest (only resumes with score >= 80 are emailed)."
             )
         elif not current_user.email:
             logger.warning(f"User {current_user.id} has no email address. Skipping email digest.")

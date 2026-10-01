@@ -71,9 +71,9 @@ def build_email_html(
         """
 
     intro_text = (
-        f"The original candidate resume files (PDF/DOCX) for <strong>{len(candidates)} candidate(s)</strong> are attached to this email:"
+        f"The original candidate resume files (PDF/DOCX) for <strong>{len(candidates)} candidate(s)</strong> scoring <strong>&ge; 80% ATS Fit</strong> are attached to this email:"
         if has_attachments else
-        f"Candidate screening overview for <strong>{len(candidates)} candidate(s)</strong>:"
+        f"Candidate screening overview for <strong>{len(candidates)} candidate(s)</strong> scoring <strong>&ge; 80% ATS Fit</strong>:"
     )
 
     html = f"""
@@ -88,7 +88,7 @@ def build_email_html(
             <!-- Header -->
             <div style="background: #081b2a; padding: 24px; text-align: left; border-bottom: 3px solid #2ad38a;">
                 <div style="font-size: 12px; color: #7ef0be; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">AI Resume Screener</div>
-                <h1 style="margin: 6px 0 0 0; color: #ffffff; font-size: 20px; font-weight: 800;">Candidate Screening Digest</h1>
+                <h1 style="margin: 6px 0 0 0; color: #ffffff; font-size: 20px; font-weight: 800;">Shortlisted Candidate Digest (ATS &ge; 80%)</h1>
                 <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 14px;">Role: <strong style="color: #f8fafc;">{job_title}</strong></p>
             </div>
 
@@ -155,11 +155,11 @@ def _send_via_resend(
 
     target_recipient = os.getenv("RESEND_RECIPIENT_OVERRIDE") or recipient_email
 
-    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Top Candidate Resume(s) Attached (ATS >= 80%)" if has_attachments else "Candidate Screening Digest (ATS >= 80%)"
     payload = {
         "from": from_sender,
         "to": [target_recipient],
-        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}",
+        "subject": f"[{job_title}] {len(candidates)} Qualified Candidate(s) - {subject_suffix}",
         "html": html_content,
     }
 
@@ -292,10 +292,10 @@ def _send_via_gmail_relay(
     has_attachments = bool(attached_files)
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
 
-    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Top Candidate Resume(s) Attached (ATS >= 80%)" if has_attachments else "Candidate Screening Digest (ATS >= 80%)"
     payload = {
         "to": recipient_email,
-        "subject": f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}",
+        "subject": f"[{job_title}] {len(candidates)} Qualified Candidate(s) - {subject_suffix}",
         "html": html_content,
         "attachments": [
             {
@@ -425,11 +425,11 @@ def _send_via_smtp(
     elif attached_files:
         notice = f"<strong>All {len(attached_files)} resume file(s) are attached to this email.</strong>"
 
-    subject_suffix = "Candidate Resume(s) Attached" if has_attachments else "Candidate Screening Digest"
+    subject_suffix = "Top Candidate Resume(s) Attached (ATS >= 80%)" if has_attachments else "Candidate Screening Digest (ATS >= 80%)"
     msg = MIMEMultipart()
     msg["From"] = f"{from_name} <{smtp_user}>"
     msg["To"] = recipient_email
-    msg["Subject"] = f"[{job_title}] {len(candidates)} Candidate(s) Screened - {subject_suffix}"
+    msg["Subject"] = f"[{job_title}] {len(candidates)} Qualified Candidate(s) - {subject_suffix}"
 
     html_content = build_email_html(job_title, candidates, notice=notice, has_attachments=has_attachments)
     msg.attach(MIMEText(html_content, "html", "utf-8"))
@@ -505,10 +505,10 @@ def send_screening_digest_email(
     2. RESEND_API_KEY (Priority 2): Resend HTTP API (Port 443).
        Used if configured; redirects sandbox testing emails to the account owner.
     3. SMTP (Priority 3): Traditional SMTP (ports 587/465), suitable for localhost.
-    Includes both the 1-line AI summaries and attached resume files.
+    Attaches authentic resume files for qualified candidates (ATS >= 80%).
     """
     if not recipient_email or not candidates:
-        logger.info("No recipient email or candidates provided for email digest.")
+        logger.info("No recipient email or qualified candidates (ATS >= 80%) provided for email digest. Skipping email.")
         return False
 
     # 1. Check Gmail HTTPS Relay (sends from personal Gmail to ANY recipient over Port 443)
