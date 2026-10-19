@@ -15,14 +15,25 @@ from app.core.security import get_password_hash, verify_password, create_access_
 # Allow HTTP on localhost during development (OAuthlib requires HTTPS by default)
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-# Resolve path to client_secret.json (works whether run from root or backend directory)
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-ENV_SECRET_FILE = os.getenv("GOOGLE_CLIENT_SECRETS_FILE", "client_secret.json")
-if os.path.isabs(ENV_SECRET_FILE):
-    CLIENT_SECRETS_FILE = ENV_SECRET_FILE
-else:
-    potential_path = os.path.join(BACKEND_DIR, ENV_SECRET_FILE)
-    CLIENT_SECRETS_FILE = potential_path if os.path.exists(potential_path) else ENV_SECRET_FILE
+def get_client_secrets_file() -> str:
+    env_file = os.getenv("GOOGLE_CLIENT_SECRETS_FILE", "client_secret.json")
+    if os.path.isabs(env_file) and os.path.exists(env_file):
+        return env_file
+
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+    root_dir = os.path.abspath(os.path.join(backend_dir, ".."))
+    candidates = [
+        os.path.join(os.getcwd(), env_file),
+        os.path.join(os.getcwd(), "backend", env_file),
+        os.path.join(backend_dir, env_file),
+        os.path.join(root_dir, env_file),
+        r"C:\Users\DELL\Downloads\client_secret_67763657516-63mckjfb51snctn787glrq3j8hstfpq8.apps.googleusercontent.com.json",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+
+    return env_file
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/google/callback/")
@@ -66,14 +77,15 @@ def google_login():
     """
     Initiate Google OAuth 2.0 flow: redirects browser to Google Consent Screen
     """
-    if not os.path.exists(CLIENT_SECRETS_FILE):
+    secrets_file = get_client_secrets_file()
+    if not os.path.exists(secrets_file):
         raise HTTPException(
             status_code=500,
-            detail=f"Google credentials file not found at: {CLIENT_SECRETS_FILE}"
+            detail=f"Google credentials file not found at: {secrets_file}. Please ensure client_secret.json is in your backend directory."
         )
 
     flow = Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE,
+        secrets_file,
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI
     )
@@ -96,9 +108,13 @@ def google_callback(code: str = None, error: str = None, db: Session = Depends(g
     if not code:
         return RedirectResponse(url=f"{FRONTEND_URL}/login?error=Authorization+code+missing")
 
+    secrets_file = get_client_secrets_file()
+    if not os.path.exists(secrets_file):
+        return RedirectResponse(url=f"{FRONTEND_URL}/login?error=Google+credentials+file+not+found")
+
     try:
         flow = Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
+            secrets_file,
             scopes=SCOPES,
             redirect_uri=REDIRECT_URI
         )
