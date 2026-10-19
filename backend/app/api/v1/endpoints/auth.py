@@ -87,7 +87,8 @@ def google_login():
     flow = Flow.from_client_secrets_file(
         secrets_file,
         scopes=SCOPES,
-        redirect_uri=REDIRECT_URI
+        redirect_uri=REDIRECT_URI,
+        autogenerate_code_verifier=False
     )
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
@@ -116,7 +117,8 @@ def google_callback(code: str = None, error: str = None, db: Session = Depends(g
         flow = Flow.from_client_secrets_file(
             secrets_file,
             scopes=SCOPES,
-            redirect_uri=REDIRECT_URI
+            redirect_uri=REDIRECT_URI,
+            autogenerate_code_verifier=False
         )
         flow.fetch_token(code=code)
         credentials = flow.credentials
