@@ -82,11 +82,6 @@ async def upload_resume(file: UploadFile = File(...)):
 # 6. Include API Routers
 app.include_router(api_router, prefix="/api/v1")
 
-# Route root /google/callback/ to match the redirect_uri in Google Cloud credentials JSON
-from app.api.v1.endpoints.auth import google_callback
-app.add_api_route("/google/callback", google_callback, methods=["GET"], include_in_schema=False)
-app.add_api_route("/google/callback/", google_callback, methods=["GET"], include_in_schema=False)
-
 @app.get("/")
 def health_check():
     return {"status": "Backend is running and database is connected"}

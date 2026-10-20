@@ -1,13 +1,9 @@
 import axios from 'axios';
 
 // Vite uses import.meta.env.MODE instead of process.env.NODE_ENV
-export const API_BASE_URL = import.meta.env.MODE === 'production'
+const API_BASE_URL = import.meta.env.MODE === 'production'
   ? 'https://ai-resume-screener-yfnp.onrender.com/api/v1'
   : 'http://127.0.0.1:8000/api/v1';
-
-export const GOOGLE_AUTH_URL = import.meta.env.MODE === 'production'
-  ? 'https://ai-resume-screener-yfnp.onrender.com/api/v1/auth/google/login'
-  : 'http://localhost:8000/api/v1/auth/google/login';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
